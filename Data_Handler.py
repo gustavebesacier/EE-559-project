@@ -59,6 +59,7 @@ def Batcher(neutral_txt_file, hate_txt_file, batch_size):
     return mixed_batches
 
 def prepare_data_loader(train_data, test_data, batch_size):
+    #TODO Build DataLoader and find train_set and test_set (must be built)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader

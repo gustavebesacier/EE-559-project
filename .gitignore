@@ -1,0 +1,5 @@
+*.txt
+*.zip
+/HateBERT_hateval
+/RAL-E
+*.csv

@@ -73,7 +73,7 @@ if __name__ == "__main__":
     print(os.getcwd())
 
     add_entries("./prompts", "dataset/output.csv")
-    clean_entries("dataset/output.csv")
+    # clean_entries("dataset/output.csv")
     no_tone_csv("dataset/output.csv")
     target_to_nb("dataset/no_tone_output.csv")
     print("Files were created")

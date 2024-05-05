@@ -3,3 +3,4 @@
 /HateBERT_hateval
 /RAL-E
 *.csv
+.DS_STORE

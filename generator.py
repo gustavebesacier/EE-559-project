@@ -2,7 +2,7 @@ import csv
 import pandas as pd
 import os
 
-    
+pd.set_option('future.no_silent_downcasting', True)
 
 def get_tones_targets(folder="./prompts"):
     """Return 2 lists for a given folder: one contains the kinds of tones, the second contains the targets"""
@@ -62,7 +62,7 @@ def no_tone_csv(file):
     df.to_csv("dataset/no_tone_output.csv", index=False)
 
 def target_to_nb(file):
-    mapping = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14}
+    mapping = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
     df = pd.read_csv(file)
     df["target"] = df["target"].replace(mapping)
     df.to_csv("dataset/no_tone_nbtarget_output.csv", index=False)
@@ -72,8 +72,9 @@ if __name__ == "__main__":
     
     print(os.getcwd())
 
-    add_entries("./prompts", "dataset/output.csv")
+    # add_entries("./prompts", "dataset/output.csv")
     # clean_entries("dataset/output.csv")
-    no_tone_csv("dataset/output.csv")
+    # no_tone_csv("dataset/output.csv")
     target_to_nb("dataset/no_tone_output.csv")
+    clean_entries("dataset/no_tone_nbtarget_output.csv")
     print("Files were created")

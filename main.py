@@ -1,9 +1,14 @@
 import torch
 import torch.optim as optim
-from Student_model import create_student_model, create_teacher_model
+#from Student_model import create_student_model, create_teacher_model
 from Training_Evaluation import train_cycle_with_distillation, f1, acc
-from Data_Handler import prepare_data_loader
+from Data_Handler import prepare_data_loader, hateXplain_parser
 
+hateXplain_parser()
+
+
+
+"""
 #test_hateBERT()
 
 # Set up student and teacher models
@@ -23,3 +28,4 @@ train_loader, test_loader = prepare_data_loader(train_data, test_data, batch_siz
 
 # Train the student model with distillation
 train_metrics_log, test_metrics_log = train_cycle_with_distillation(student_model, teacher_model, optimizer, criterion, metrics, train_loader, test_loader, n_epochs=20, device=device, alpha=0.25 , T=2)
+"""

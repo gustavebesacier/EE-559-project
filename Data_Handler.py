@@ -123,17 +123,26 @@ def hateXplain_builder(brut):
     if toxic_count >= 2:
         toxic = 1
 
-    # select the target of the post, need at least two annotators that agree on a target,
-    # if multiple targets are retained, they become each a datapoint (same sentence and label, different target)
+    # select the target of the post. If toxic = 1: need at least two annotators that agree on a target.
+    # If toxic = 0: need only one annotator that agree on a target. if multiple targets are retained,
+    # they become each a datapoint (same sentence and label, different target)
     annotation = np.zeros(N_TARGET_XPLAIN)
     for j in range(0, N_TARGET_XPLAIN):
         for i in range(3, len(brut)):
             if brut[i] == HATEXPLAIN_TARGET[j]:
                 annotation[j] += 1
 
-    n_processed = sum(1 for val in annotation if val >= 2)
-    processed_matrix = np.full((n_processed, 1), toxic)
-    targets = np.array([HATEXPLAIN_TARGET[i] for i in range(N_TARGET_XPLAIN) if annotation[i] >= 2]).reshape(n_processed,1)
+    if toxic == 0:
+        n_processed = sum(1 for val in annotation if val >= 1)
+        processed_matrix = np.full((n_processed, 1), toxic)
+        targets = np.array([HATEXPLAIN_TARGET[i] for i in range(N_TARGET_XPLAIN)
+                            if annotation[i] >= 1]).reshape(n_processed,1)
+    else:
+        n_processed = sum(1 for val in annotation if val >= 2)
+        processed_matrix = np.full((n_processed, 1), toxic)
+        targets = np.array([HATEXPLAIN_TARGET[i] for i in range(N_TARGET_XPLAIN)
+                            if annotation[i] >= 2]).reshape(n_processed, 1)
+
     final_matrix = np.hstack((processed_matrix, targets))
 
     return final_matrix

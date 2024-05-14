@@ -7,6 +7,9 @@ from Data_Handler import prepare_data_loader, hateXplain_parser
 
 hateXplain_parser()
 
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "others",
+              "disabilities"]
+
 
 
 """

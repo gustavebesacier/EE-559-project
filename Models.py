@@ -1,6 +1,7 @@
 from transformers import BertTokenizer
 from transformers import BertForSequenceClassification, BertConfig
 from Data_Handler import Batcher
+from torchsummary import summary
 
 def create_student_model(num_classes = 2, transformer_size = 256, nbr_layers = 4, nbr_heads = 4):
     """
@@ -30,10 +31,19 @@ def create_teacher_model():
     :return: the teacher model
     """
     teacher_model = BertForSequenceClassification.from_pretrained("hate_bert")
-    teacher_model.eval()  # Ensure teacher model is in evaluation mode
+
+    #Putting it in eval mode
+    teacher_model.eval()
     return teacher_model
 
-
+def Model_summary(model, input_size):
+    """
+    Returns the model summary as well as the size
+    :param model: the model in question
+    :param input_size: a tuple composed of (batch size, max sequence length)
+    :return: None
+    """
+    summary(model, input_size=input_size)
 
 # Example usage:
 num_classes = 2  # Assuming binary classification (hate vs. non-hate)
@@ -45,12 +55,6 @@ tokenizer = BertTokenizer.from_pretrained("hate_bert")
 
 # Print model architecture
 print(hatebert_model)
-
-text = "all asians make their kids take math lessons and learn karate we do not really need to say it, but asians are obviously trying to take over our country and we should try and prevent the evil yellow invasion because the chinese want to spread their asian evil across the world, asian men all have small peckers moms who are asian are known to smack their kids if they are not behaving if you have been driving lately, it is pretty obvious that the worst drivers are asian women"
-
-text = "all asians make their kids take math lessons and learn karate\n- we do not really need to say it, but asians are obviously trying to take over our country\n- we should try and prevent the evil yellow invasion because the chinese want to spread their asian evil across the world\n- asian men all have small peckers\n- moms who are asian are known to smack their kids if they are not behaving\n- if you have been driving lately, it is pretty obvious that the worst drivers are asian women\n-"
-
-text = "viewing an asian composer or performing musician only through sociological lenses are still relatively common in various countries, but times are changing\n- recently, there has been an increase in attacks against asian americans and we all need to speak out\n- we often refer to asians generally, but there are hundreds of asian cultures\n- through public awareness and education, views on asian americans can change for the better\n- how we talk about and recognize the importance of asian american history can influence how people think about asian americans\n- when people of asian descent are portrayed in the media, they are often shown as criminals, hackers or bad parents\n-"
 
 text = "you can’t run a society if many people are mentally disabled; those few who are not would be constantly at risk and constantly uncomfortable"
 print(text)
@@ -88,7 +92,7 @@ def classify_batches(batches):
                 print()
 
 def test_hateBERT():
-    neutral_txt_file = "neutral_asian_1k.txt"
-    hate_txt_file = "hate_asian_1k.txt"
+    neutral_txt_file = "Data/neutral_asian_1k.txt"
+    hate_txt_file = "Data/hate_asian_1k.txt"
     batches = Batcher(neutral_txt_file, hate_txt_file, batch_size=4)
     classify_batches(batches)

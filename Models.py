@@ -92,7 +92,7 @@ def classify_batches(batches):
                 print()
 
 def test_hateBERT():
-    neutral_txt_file = "Data/neutral_asian_1k.txt"
-    hate_txt_file = "Data/hate_asian_1k.txt"
+    neutral_txt_file = "Data_Gui/neutral_asian_1k.txt"
+    hate_txt_file = "Data_Gui/hate_asian_1k.txt"
     batches = Batcher(neutral_txt_file, hate_txt_file, batch_size=4)
     classify_batches(batches)

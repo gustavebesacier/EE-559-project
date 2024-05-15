@@ -2,13 +2,18 @@ import random
 import json
 import numpy as np
 import pandas as pd
+import datasets
 
-
-#18 targets
-HATEXPLAIN_TARGET = ["African","Arabs","Asian","Caucasian","Hispanic","Buddhism","Christian","Hindu","Islam","Jewish",
-                     "Men","Women","Heterosexual","Gay","Indigenous","Refugee/Immigrant","None","Others"]
-
+# 18 targets
+HATEXPLAIN_TARGET = ["African", "Arabs", "Asian", "Caucasian", "Hispanic", "Buddhism", "Christian", "Hindu", "Islam",
+                     "Jewish",
+                     "Men", "Women", "Heterosexual", "Gay", "Indigenous", "Refugee/Immigrant", "None", "Others"]
 N_TARGET_XPLAIN = 18
+
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities",
+              "others"]
+N_OUR_TARGET = 11
+
 
 def read_text_file(filename):
     """
@@ -68,8 +73,9 @@ def Batcher(neutral_txt_file, hate_txt_file, batch_size):
 
     return mixed_batches
 
+
 def prepare_data_loader(train_data, test_data, batch_size):
-    #TODO Build DataLoader and find train_set and test_set (must be built)
+    # TODO Build DataLoader and find train_set and test_set (must be built)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
@@ -97,7 +103,7 @@ def hateXplain_parser(filename="dataset_hateXplain.json"):
 
             data_for_a_sentence_without_s = hateXplain_builder(labels + targets_flat)
             if data_for_a_sentence_without_s.size != 0:
-                sentences = np.full((data_for_a_sentence_without_s.shape[0],1), sentence)
+                sentences = np.full((data_for_a_sentence_without_s.shape[0], 1), sentence)
                 data_for_a_sentence = np.hstack((data_for_a_sentence_without_s, sentences))
                 data_matrix = np.vstack((data_matrix, data_for_a_sentence))
 
@@ -108,7 +114,7 @@ def hateXplain_parser(filename="dataset_hateXplain.json"):
 def hateXplain_builder(brut):
     """
     Take an entry of the dataset hateXplain and process it to choose a unique label and a list of targets.
-    :param brut: a list of string coming from the hateXplain dataset
+    :param brut: a list of string coming from the hateXplain dataset with toxicity and target annotations
     :return: ndarray = shape (number of targets found, 2) where for a line: the first element is the label
     (1: toxic, 0:non-toxic), the second is a target from hateXplain target
     """
@@ -136,7 +142,7 @@ def hateXplain_builder(brut):
         n_processed = sum(1 for val in annotation if val >= 1)
         processed_matrix = np.full((n_processed, 1), toxic)
         targets = np.array([HATEXPLAIN_TARGET[i] for i in range(N_TARGET_XPLAIN)
-                            if annotation[i] >= 1]).reshape(n_processed,1)
+                            if annotation[i] >= 1]).reshape(n_processed, 1)
     else:
         n_processed = sum(1 for val in annotation if val >= 2)
         processed_matrix = np.full((n_processed, 1), toxic)
@@ -148,5 +154,52 @@ def hateXplain_builder(brut):
     return final_matrix
 
 
+def measuring_hate_speech_parser():
+    """
+        Load the measuring_hate_speech pd datafile, and map the correct column to our targets, call the function to
+        create files in the desired format
+        """
+    dataset = datasets.load_dataset('ucberkeley-dlab/measuring-hate-speech', 'default')
+    df = dataset['train'].to_pandas()
+
+    # 13 is hate speech score
+    # 14 is text
+    # 22 is first target: asian
+    # Map every target with the right column of the file
+    mapping = {
+        OUR_TARGET[0]: [51],
+        OUR_TARGET[1]: [35],
+        OUR_TARGET[2]: [22],
+        OUR_TARGET[3]: [23],
+        OUR_TARGET[4]: [47, 48, 49, 50, 54, 55, 56],
+        OUR_TARGET[5]: [24],
+        OUR_TARGET[6]: [37],
+        OUR_TARGET[7]: [26, 27],
+        OUR_TARGET[8]: [25],
+        OUR_TARGET[9]: [67, 68, 69, 70, 71, 72, 73, 74],
+        OUR_TARGET[10]: [28, 29, 30, 31, 32, 33, 34, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 52, 53, 57, 58, 59, 60, 61,
+                         62, 63, 65, 66]
+    }
+
+    for target in OUR_TARGET:
+        for column_index in mapping[target]:
+            measuring_hate_speech_file_builder(df[df.iloc[:, column_index] == True], target)
 
 
+def measuring_hate_speech_file_builder(df_target, target):
+    """
+           Build two sort of file: toxic, with a hate_speech_score larger than 0.5 and no_toxic, <=0.5
+           :param df_target: panda datafile, or a specific target
+           :param target: string, the target from OUR_TARGET
+           """
+    # Toxic or not, starting from hate_speech_score larger than 0.5
+    toxic = df_target[df_target['hate_speech_score'] > 0.5]
+    non_toxic = df_target[df_target['hate_speech_score'] <= 0.5]
+
+    # Only retain the sentences
+    toxic_sentences = toxic[['text']]
+    non_toxic_sentences = non_toxic[['text']]
+
+    # Create the files
+    toxic_sentences.to_csv(f"dataset/hate_{target}.csv", index=False)
+    non_toxic_sentences.to_csv(f"dataset/neutral_{target}.csv", index=False)

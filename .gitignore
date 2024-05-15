@@ -4,3 +4,8 @@
 /RAL-E
 *.csv
 *.DS_STORE
+*.idea
+*.iml
+/hate_bert
+/dataset
+/Data_Gui

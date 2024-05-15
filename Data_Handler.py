@@ -2,11 +2,50 @@ import random
 import json
 import numpy as np
 import pandas as pd
+import os
+from csv import writer
+from tqdm import tqdm
 
 
 #18 targets
 HATEXPLAIN_TARGET = ["African","Arabs","Asian","Caucasian","Hispanic","Buddhism","Christian","Hindu","Islam","Jewish",
                      "Men","Women","Heterosexual","Gay","Indigenous","Refugee/Immigrant","None","Others"]
+
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "others",
+              "disabilities"]
+
+DIC_TARGET = {
+    'none':                 'others',
+    'african':              'black',
+    'asian':                'asian',
+    'caucasian':            'others',
+    'women':                'women',
+    'jewish':               'jews',
+    'islam':                'muslim',
+    'hispanic':             'latino',
+    'indigenous':           'indigenous',
+    'men':                  'others',
+    'christian':            'others',
+    'heterosexual':         'others',
+    'hindu':                'others',
+    'buddhism':             'others',
+    'bisexual':             'lgbtq',
+    'chinese':              'asian',
+    'black':                'black',
+    'immigrant':            'other',
+    'lgbt':                 'lgbtq',
+    'mental_disability':    'other',
+    'mexican':              'other',
+    'middle_east':          'arab',
+    'muslim':               'muslim',
+    'native_american':      'indigenous',
+    'physical_disability':  'other',
+    'trans':                'lgbtq',
+    'lgbtq':                'lgbtq',
+    'latino':               'latino'
+    }
+
+TARGET_CONVERTER = {1: 'hate', 0: 'neutral'}
 
 N_TARGET_XPLAIN = 18
 
@@ -141,6 +180,66 @@ def hateXplain_builder(brut):
 
     return final_matrix
 
+def create_files(list_target):
+    """For each target and tone, creates an empty file if not already existing or only open it"""
+    for target in list_target:
+        for tone in ['hate', 'neutral']:
+            with open(f'Data/{tone}_{target}.csv', 'w') as _:
+                pass
+
+def clean_folder():
+    """Clear the folder 'Data'."""
+    with os.scandir("Data/") as entries:
+        for entry in entries:
+            if entry.is_file():
+                os.unlink(entry.path)
+        print("All files from 'Data' deleted successfully.")
+
+def write_entry(tone, target, entry):
+    """Given a tone (hate/neutral)"""
+    with open(f'Data/{tone}_{target}.csv', 'a') as f:
+        writer_object = writer(f)
+        writer_object.writerow([entry])
+        f.close()
+
+def assign_target(tone, target, entry):
+    """
+    Takes the tone, target and entry from the line of the file
+    Associates the target as written on the file to one category, according to the mapping of DIC_TARGET
+    """
+    write_entry(tone, DIC_TARGET[target], entry)
+
+def data_collection(source="dataset_hateXplain.csv"):
+
+    if source == "dataset_hateXplain.csv":
+        with open("dataset_hateXplain.csv") as f:
+            lines = f.readlines()[2:]
+            for line in tqdm(lines):
+                entry = line.split(",")
+                tone, target, entry = entry[0], entry[1].lower(), entry[2]
+                # use the mapping from TARGET_CONVERTER to turn the 0/1 to neutral/hate
+                assign_target(TARGET_CONVERTER[int(tone)], target, entry.strip())
+    
+    else:
+        with open(source) as f:
+            lines = f.readlines()[1:]
+            for line in tqdm(lines):
+                entry = line.split(",")
+                tone, target, entry = entry[0], entry[1].lower(), entry[2]
+                assign_target(tone, target, entry.strip())
 
 
+if __name__ == '__main__':
+    # Empty the folder
+    clean_folder()
 
+    # Create the empty files
+    create_files(OUR_TARGET)
+
+    # Create the files using hateXplain dataset
+    data_collection("dataset_hateXplain.csv")
+
+    # Add data from Toxigen
+    data_collection("dataset/output.csv")
+
+    print("Tuto bene!!")

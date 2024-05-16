@@ -1,5 +1,6 @@
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
 
 # Define a custom dataset class
 class CustomDataset(Dataset):
@@ -27,7 +28,7 @@ def load_data(hate_file, neutral_file):
 
     return data
 
-def train_test_split(hate_target,neutral_target, test_size=0.2, random_state=42):
+def Spliter(hate_target,neutral_target, test_size=0.2, random_state=42):
     # Load hate data and Assign label 1 to hate data
     hate_data = pd.read_csv(hate_target, header=None, names=['text'])
     hate_data['label'] = 1
@@ -45,11 +46,7 @@ def train_test_split(hate_target,neutral_target, test_size=0.2, random_state=42)
     return train_data, test_data
 
 
-def prepare_data_loader(hate_target, neutral_target, batch_size, test_size=0.2, random_state=42):
-    # Load data and split into train and test sets
-    train_data, test_data = train_test_split(hate_target, neutral_target, test_size=test_size,
-                                             random_state=random_state)
-
+def prepare_data_loader(train_data, test_data, batch_size):
     # Create custom datasets
     train_dataset = CustomDataset(train_data)
     test_dataset = CustomDataset(test_data)

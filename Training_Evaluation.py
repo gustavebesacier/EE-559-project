@@ -5,7 +5,7 @@ from sklearn.metrics import f1_score, accuracy_score
 
 #THIS WHOLE FILE IS NOTE CODED BY US AND IS DIRECTLY TAKEN FROM THE COURSE CODE
 
-def train_epoch_with_distillation(student_model, teacher_model, optimizer, criterion, metrics, train_loader, device,
+def train_epoch_with_distillation(student_model, teacher_model, tokenizer, optimizer, criterion, metrics, train_loader, device,
                                   alpha=0.25, T=2):
     '''
     alpha: a hyperparameter.
@@ -35,14 +35,25 @@ def train_epoch_with_distillation(student_model, teacher_model, optimizer, crite
 
     # Run on the datasets (inspired from top part)
     for batch_num, (x_batch, y_batch) in tqdm(enumerate(train_loader)):
-        data = x_batch.to(device)
+        print(x_batch)
+        print(type(x_batch))
+        print(y_batch)
+        print(type(y_batch))
+        inputs = tokenizer.batch_encode_plus(x_batch, return_tensors="pt", padding=True, truncation=True)
+        print(inputs)
+        print(type(inputs))
+        data = inputs.to(device)
         target = y_batch.to(device)
 
         optimizer.zero_grad()
 
         with torch.no_grad():
-            teacher_preds = teacher_model(data)
-        student_preds = student_model(data)
+            teacher_preds = teacher_model(**data).logits
+        student_preds = student_model(**data).logits
+        
+        print(student_preds)
+        print("target")
+        print(target)
 
         # loss on students
         loss = criterion(student_preds, target)
@@ -84,7 +95,7 @@ def train_epoch_with_distillation(student_model, teacher_model, optimizer, crite
 
 
 # Modification of train_cycle function to include the teacher model
-def train_cycle_with_distillation(student_model, teacher_model, optimizer, criterion, metrics, train_loader,
+def train_cycle_with_distillation(student_model, teacher_model, tokenizer, optimizer, criterion, metrics, train_loader,
                                   test_loader, n_epochs, device, alpha=0.25, T=2):
     train_loss_log, test_loss_log = [], []
     metrics_names = list(metrics.keys())
@@ -93,7 +104,7 @@ def train_cycle_with_distillation(student_model, teacher_model, optimizer, crite
 
     for epoch in range(n_epochs):
         print("Epoch {0} of {1}".format(epoch, n_epochs))
-        train_loss, train_metrics = train_epoch_with_distillation(student_model, teacher_model, optimizer, criterion,
+        train_loss, train_metrics = train_epoch_with_distillation(student_model, teacher_model, tokenizer, optimizer, criterion,
                                                                   metrics, train_loader, device, alpha=alpha, T=T)
         # evaluation is the same as for normal simple training.
         # Although, take into account that the loss computed for evaluation is a simple CrossEntropy loss and it will differ significantly from training loss

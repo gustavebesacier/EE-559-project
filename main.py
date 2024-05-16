@@ -6,24 +6,28 @@ from Training_Evaluation import train_cycle_with_distillation, f1, acc
 from Datasets_Batches import Spliter, prepare_data_loader
 from Data_Handler import clean_folder, create_files, data_collection
 from transformers import BertTokenizer, get_scheduler
+from Running import load_metrics, trainer_distiller
 
 #OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "others", "disabilities"]
 OUR_TARGET = ["women"]
+missing_data = False
+save = False
 
 def main():
-    # Empty the folder
-    #clean_folder()
+    if missing_data:
+        # Empty the folder
+        clean_folder()
 
-    # Create the empty files
-    #create_files(OUR_TARGET)
+        # Create the empty files
+        create_files(OUR_TARGET)
 
-    # Create the files using hateXplain dataset
-    #data_collection("dataset_hateXplain.csv")
+        # Create the files using hateXplain dataset
+        data_collection("dataset_hateXplain.csv")
 
-    # Add data from Toxigen
-    #data_collection("dataset/output.csv")
+        # Add data from Toxigen
+        data_collection("dataset/output.csv")
 
-    print("Tuto bene!!")
+        print("Tuto bene!!")
 
     #define a dictionary linking a student model to a specific target
     target_models = {target: create_student_model(num_classes=2) for target in OUR_TARGET}
@@ -49,38 +53,44 @@ def main():
         neutral_target = datasets[target]["neutral"]
 
         #Fetch the data and split it into test and training
-        train_data, test_data = Spliter(hate_target,neutral_target, test_size=0.2, random_state=42)
+        train_data, test_data = Spliter(hate_target,neutral_target, tokenizer, test_size=0.2, random_state=42)
 
         # Prepare data loaders
         train_loader, test_loader = prepare_data_loader(train_data, test_data, batch_size=32)
 
         # Define optimizer, criterion, and device
         optimizer = AdamW(target_models[target].parameters(), lr=5e-5)
-        criterion = torch.nn.CrossEntropyLoss()
-        metrics = {'ACC': acc, 'F1-weighted': f1}
+        #criterion = torch.nn.CrossEntropyLoss()
+        metrics = load_metrics("accuracy", "f1")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         num_epochs = 2
-        num_training_steps = num_epochs * len(train_dataloader)
+        alpha = 0.25
+        temperature = 2
+        num_training_steps = num_epochs * len(train_loader)
         # feel free to experiment with different num_warmup_steps
         lr_scheduler = get_scheduler(
             name="linear", optimizer=optimizer, num_warmup_steps=1, num_training_steps=num_training_steps
         )
 
         # Train the student model with distillation
-        train_metrics_log, test_metrics_log = train_cycle_with_distillation(target_models[target], teacher_model,tokenizer, optimizer,
-                                                                            criterion, metrics, train_loader,
-                                                                            test_loader, n_epochs=num_epochs, device=device,
-                                                                            alpha=0.25, T=2)
+        print("Start training for ",target)
+        trainer_distiller(student_model=target_models[target], teacher_model=teacher_model, optimizer=optimizer, nbr_steps=num_training_steps, lr_scheduler=lr_scheduler, metrics=metrics, train_loader=train_loader,
+                          test_loader=test_loader, nbr_epochs=num_epochs, device=device, alpha=alpha, T= temperature, tokenizer=tokenizer)
+        #train_metrics_log, test_metrics_log = train_cycle_with_distillation(target_models[target], teacher_model,tokenizer, optimizer,
+                                                                            #criterion, metrics, train_loader,
+                                                                            #test_loader, n_epochs=num_epochs, device=device,
+                                                                            #alpha=0.25, T=2)
 
         # Save logs
-        log_file = os.path.join("logs_and_weights", f"{target}_log.txt")
-        with open(log_file, 'w') as f:
-            f.write(f"Train Metrics Log:\n{train_metrics_log}\n\nTest Metrics Log:\n{test_metrics_log}")
+        if save:
+            log_file = os.path.join("logs_and_weights", f"{target}_log.txt")
+            with open(log_file, 'w') as f:
+                f.write(f"Train Metrics Log:\n{train_metrics_log}\n\nTest Metrics Log:\n{test_metrics_log}")
 
-        # Save model weights
-        weights_file = os.path.join("logs_and_weights", f"{target}_weights.pth")
-        torch.save(target_models[target].state_dict(), weights_file)
+            # Save model weights
+            weights_file = os.path.join("logs_and_weights", f"{target}_weights.pth")
+            torch.save(target_models[target].state_dict(), weights_file)
 
 
 if __name__ == '__main__':

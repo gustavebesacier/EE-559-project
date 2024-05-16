@@ -243,3 +243,52 @@ def setup_data():
     data_collection("dataset/output.csv")
 
     print("Tuto bene!!")
+
+def measuring_hate_speech_file_builder(df_target, target):
+    """
+           Build two sort of file: toxic, with a hate_speech_score larger than 0.5 and no_toxic, <=0.5
+           :param df_target: panda datafile, or a specific target
+           :param target: string, the target from OUR_TARGET
+           """
+    # Toxic or not, starting from hate_speech_score larger than 0.5
+    toxic = df_target[df_target['hate_speech_score'] > 0.5]
+    non_toxic = df_target[df_target['hate_speech_score'] <= 0.5]
+
+    # Only retain the sentences
+    toxic_sentences = toxic[['text']]
+    non_toxic_sentences = non_toxic[['text']]
+
+    # Create the files
+    toxic_sentences.to_csv(f"dataset/hate_{target}.csv", index=False)
+    non_toxic_sentences.to_csv(f"dataset/neutral_{target}.csv", index=False)
+
+def measuring_hate_speech_parser():
+    """
+        Load the measuring_hate_speech pd datafile, and map the correct column to our targets, call the function to
+        create files in the desired format
+        """
+    dataset = datasets.load_dataset('ucberkeley-dlab/measuring-hate-speech', 'default')
+    df = dataset['train'].to_pandas()
+
+    # 13 is hate speech score
+    # 14 is text
+    # 22 is first target: asian
+    # Map every target with the right column of the file
+    mapping = {
+        OUR_TARGET[0]: [51],
+        OUR_TARGET[1]: [35],
+        OUR_TARGET[2]: [22],
+        OUR_TARGET[3]: [23],
+        OUR_TARGET[4]: [47, 48, 49, 50, 54, 55, 56],
+        OUR_TARGET[5]: [24],
+        OUR_TARGET[6]: [37],
+        OUR_TARGET[7]: [26, 27],
+        OUR_TARGET[8]: [25],
+        OUR_TARGET[9]: [67, 68, 69, 70, 71, 72, 73, 74],
+        OUR_TARGET[10]: [28, 29, 30, 31, 32, 33, 34, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 52, 53, 57, 58, 59, 60, 61,
+                         62, 63, 65, 66]
+    }
+
+    for target in OUR_TARGET:
+        for column_index in mapping[target]:
+            measuring_hate_speech_file_builder(df[df.iloc[:, column_index] == True], target)

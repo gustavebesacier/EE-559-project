@@ -229,3 +229,17 @@ def data_collection(source="dataset_hateXplain.csv"):
                 assign_target(tone, target, entry.strip())
 
 
+def setup_data():
+    # Empty the folder
+    clean_folder()
+
+    # Create the empty files
+    create_files(OUR_TARGET)
+
+    # Create the files using hateXplain dataset
+    data_collection("dataset_hateXplain.csv")
+
+    # Add data from Toxigen
+    data_collection("dataset/output.csv")
+
+    print("Tuto bene!!")

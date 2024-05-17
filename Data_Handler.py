@@ -5,14 +5,15 @@ import pandas as pd
 import os
 from csv import writer
 from tqdm import tqdm
+import datasets
 
 
 #18 targets
 HATEXPLAIN_TARGET = ["African","Arabs","Asian","Caucasian","Hispanic","Buddhism","Christian","Hindu","Islam","Jewish",
                      "Men","Women","Heterosexual","Gay","Indigenous","Refugee/Immigrant","None","Others"]
 
-OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "others",
-              "disabilities"]
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab",
+              "disabilities", "others"]
 
 DIC_TARGET = {
     'none':                 'others',
@@ -229,12 +230,14 @@ def data_collection(source="dataset_hateXplain.csv"):
                 assign_target(tone, target, entry.strip())
 
 
-def setup_data():
+def setup_data(targets,dataset_list):
     # Empty the folder
     clean_folder()
 
     # Create the empty files
     create_files(OUR_TARGET)
+
+    hateXplain_parser()
 
     # Create the files using hateXplain dataset
     data_collection("dataset_hateXplain.csv")
@@ -242,7 +245,18 @@ def setup_data():
     # Add data from Toxigen
     data_collection("dataset/output.csv")
 
+    #HuggingFace data
+    measuring_hate_speech_parser()
+
+    for target in targets:
+        #Clean the duplicates from the datasets
+        hate_target = dataset_list[target]["hate"]
+        neutral_target = dataset_list[target]["neutral"]
+        remove_duplicates_in_place(hate_target)
+        remove_duplicates_in_place(neutral_target)
+
     print("Tuto bene!!")
+
 
 def measuring_hate_speech_file_builder(df_target, target):
     """
@@ -258,9 +272,11 @@ def measuring_hate_speech_file_builder(df_target, target):
     toxic_sentences = toxic[['text']]
     non_toxic_sentences = non_toxic[['text']]
 
-    # Create the files
-    toxic_sentences.to_csv(f"dataset/hate_{target}.csv", index=False)
-    non_toxic_sentences.to_csv(f"dataset/neutral_{target}.csv", index=False)
+    # Append toxic sentences to Data/hate_{target}.csv
+    toxic_sentences.to_csv(f"Data/hate_{target}.csv", mode='a', index=False, header=False)
+
+    # Append non-toxic sentences to Data/neutral_{target}.csv
+    non_toxic_sentences.to_csv(f"Data/neutral_{target}.csv", mode='a', index=False, header=False)
 
 def measuring_hate_speech_parser():
     """
@@ -292,3 +308,13 @@ def measuring_hate_speech_parser():
     for target in OUR_TARGET:
         for column_index in mapping[target]:
             measuring_hate_speech_file_builder(df[df.iloc[:, column_index] == True], target)
+
+def remove_duplicates_in_place(file_path):
+    # Load the dataset, specifying no header and treating each line as a separate row
+    df = pd.read_csv(file_path, header=None)
+
+    # Remove duplicates
+    df_cleaned = df.drop_duplicates()
+
+    # Overwrite the original file with the cleaned dataset
+    df_cleaned.to_csv(file_path, index=False, header=False)

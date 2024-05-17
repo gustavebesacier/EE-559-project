@@ -7,22 +7,24 @@ from Data_Handler import setup_data
 from transformers import BertTokenizer, get_scheduler
 from Running import load_metrics, trainer_distiller
 
-#OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "others", "disabilities"]
-OUR_TARGET = ["women"]
+#OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities", "others"]
+OUR_TARGET = ["black"]
 missing_data = False
 save = True
 
+
 def main():
-    if not os.path.exists("Data") or not os.listdir("Data"):
-        setup_data()
-
-    #define a dictionary linking a student model to a specific target
-    target_models = {target: create_student_model(num_classes=2) for target in OUR_TARGET}
-
     # Generate the dictionary to find the file
     datasets = {
         target: {"hate": f"Data/hate_{target}.csv", "neutral": f"Data/neutral_{target}.csv"} for
         target in OUR_TARGET}
+
+    if missing_data:
+        setup_data(OUR_TARGET,datasets)
+
+    #define a dictionary linking a student model to a specific target
+    target_models = {target: create_student_model(num_classes=2) for target in OUR_TARGET}
+
 
     #Create the teacher_model
     teacher_model = create_teacher_model()
@@ -47,7 +49,7 @@ def main():
         metrics = load_metrics("accuracy", "f1")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        num_epochs = 2
+        num_epochs = 10
         alpha = 0.25
         temperature = 2
         num_training_steps = num_epochs * len(train_loader)

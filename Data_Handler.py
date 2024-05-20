@@ -33,14 +33,14 @@ DIC_TARGET = {
     'bisexual':             'lgbtq',
     'chinese':              'asian',
     'black':                'black',
-    'immigrant':            'other',
+    'immigrant':            'others',
     'lgbt':                 'lgbtq',
-    'mental_disability':    'other',
-    'mexican':              'other',
+    'mental_disability':    'others',
+    'mexican':              'others',
     'middle_east':          'arab',
     'muslim':               'muslim',
     'native_american':      'indigenous',
-    'physical_disability':  'other',
+    'physical_disability':  'others',
     'trans':                'lgbtq',
     'lgbtq':                'lgbtq',
     'latino':               'latino'
@@ -152,7 +152,7 @@ def hateXplain_builder(brut):
     toxic = 0
     toxic_count = 0
     for i in range(0, 3):
-        if brut[i] == "hatespeech" or brut[i] == "offensive":
+        if brut[i] == "hatespeech": #or brut[i] == "offensive":
             toxic_count += 1
     if toxic_count >= 2:
         toxic = 1
@@ -318,3 +318,45 @@ def remove_duplicates_in_place(file_path):
 
     # Overwrite the original file with the cleaned dataset
     df_cleaned.to_csv(file_path, index=False, header=False)
+
+def full_data_generator(targets,data):
+    # Initialize empty dataframes for concatenating the data
+    all_hate_data = pd.DataFrame()
+    all_neutral_data = pd.DataFrame()
+
+    for target in targets:
+        # generate the training and testing data paths
+        hate_target = data[target]["hate"]
+        neutral_target = data[target]["neutral"]
+
+        # Read the data from each file
+        hate_data = pd.read_csv(hate_target, header=None, names=['text'])
+        neutral_data = pd.read_csv(neutral_target, header=None, names=['text'])
+
+        # Concatenate the data
+        all_hate_data = pd.concat([all_hate_data, hate_data], ignore_index=True)
+        all_neutral_data = pd.concat([all_neutral_data, neutral_data], ignore_index=True)
+
+        # Save the concatenated data to new CSV files
+    all_hate_data.to_csv("hate_all.csv", index=False, header=False)
+    all_neutral_data.to_csv("neutral_all.csv", index=False, header=False)
+
+    remove_duplicates_in_place("hate_all.csv")
+    remove_duplicates_in_place("neutral_all.csv")
+
+
+def data_summary(targets, dataframes):
+    for target in targets:
+        # generate the training and testing data paths
+        hate_target = dataframes[target]["hate"]
+        neutral_target = dataframes[target]["neutral"]
+
+        hate_data = pd.read_csv(hate_target, header=None, names=['text'])
+        neutral_data = pd.read_csv(neutral_target, header=None, names=['text'])
+
+        print(f"{target} has {len(hate_data)} hate sentences and {len(neutral_data)} neutral ones")
+
+    hate_data = pd.read_csv("hate_all.csv", header=None, names=['text'])
+    neutral_data = pd.read_csv("neutral_all.csv", header=None, names=['text'])
+
+    print(f"Averall has {len(hate_data)} hate sentences and {len(neutral_data)} neutral ones")

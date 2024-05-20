@@ -1,7 +1,8 @@
-from transformers import BertTokenizer
 from transformers import BertForSequenceClassification, BertConfig
-from Data_Handler import Batcher
 from torchsummary import summary
+import torch
+import os
+import time
 
 def create_student_model(num_classes = 2, transformer_size = 256, nbr_layers = 4, nbr_heads = 4):
     """
@@ -25,74 +26,83 @@ def create_student_model(num_classes = 2, transformer_size = 256, nbr_layers = 4
 
     return student_model
 
-def create_teacher_model():
+def create_teacher_model(weights_path = None):
     """
     Creates the teacher model
     :return: the teacher model
     """
     teacher_model = BertForSequenceClassification.from_pretrained("hate_bert")
 
-    #Putting it in eval mode
-    teacher_model.eval()
+    if weights_path is not None:
+        weights_pretrained = torch.load(weights_path)
+        teacher_model.load_state_dict(weights_pretrained['model_state_dict'])
+
     return teacher_model
 
-def Model_summary(model, input_size):
+def Model_summary(model, batch_size, trials = 20):
     """
     Returns the model summary as well as the size
     :param model: the model in question
     :param input_size: a tuple composed of (batch size, max sequence length)
     :return: None
     """
+    # Get the maximum sequence length from the model's configuration
+    max_sequence_length = model.config.max_position_embeddings
+    print(f"Maximum sequence length from model configuration: {max_sequence_length}")
+    input_size = (batch_size, max_sequence_length)
     summary(model, input_size=input_size)
+    get_model_size(model, "temp_weights.pth")
+    num_attention_heads = model.config.num_attention_heads
+    print(f"Number of attention heads: {num_attention_heads}")
+    timer = 0
+    for i in range(trials):
+        timer += get_model_inference_time(model, input_size)
+    timer /= trials
+    print('model average inference time in seconds:', timer)
 
-# Example usage:
-num_classes = 2  # Assuming binary classification (hate vs. non-hate)
-student_model = create_student_model(num_classes)
+def get_model_size(model, temp_file='temp_model.pth'):
+    """
+    Save the model's state dictionary to a temporary file to calculate its size
+    :param model: the model in question
+    :param temp_file: temporary file to save the model
+    :return: model size in MB
+    """
+    # Save the model's state_dict to a temporary file
+    torch.save(model.state_dict(), temp_file)
 
-# Load the HateBERT model
-hatebert_model = BertForSequenceClassification.from_pretrained("hate_bert")
-tokenizer = BertTokenizer.from_pretrained("hate_bert")
+    # Get the file size in bytes
+    size_in_bytes = os.path.getsize(temp_file)
 
-# Print model architecture
-print(hatebert_model)
+    # Convert bytes to megabytes
+    size_in_mb = size_in_bytes / (1024 * 1024)
 
-text = "you can’t run a society if many people are mentally disabled; those few who are not would be constantly at risk and constantly uncomfortable"
-print(text)
-# Tokenize input text
-inputs = tokenizer(text, return_tensors="pt")
+    # Remove the temporary file
+    os.remove(temp_file)
 
-# Perform inference
-outputs = hatebert_model(**inputs)
+    print(f"Model size: {size_in_mb:.6f} MB")
 
-print(outputs)
+    return None
 
-# Get predicted class
-predicted_class = outputs.logits.argmax().item()
+def get_model_inference_time(model, input_size):
+    model.to(torch.device("cpu"))
+    model.eval()
 
-# Print predicted class
-print("Predicted class:", predicted_class)
+    # Generate dummy input data
+    input_ids = torch.randint(0, model.config.vocab_size, input_size, dtype=torch.long)
+    attention_mask = torch.ones(input_size,dtype=torch.long)
+    token_type_ids = torch.zeros(input_size, dtype=torch.long)
 
-def classify_batches(batches):
-    for batch in batches:
-        texts, labels = zip(*batch)
-        # Tokenize batch
-        inputs = tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
-        # Perform inference
-        outputs = hatebert_model(**inputs)
-        # Get predicted classes
-        predicted_classes = outputs.logits.argmax(dim=1).tolist()
-        # Print predicted classes
-        for text, label, predicted_class in zip(texts, labels, predicted_classes):
-            text = text.strip()  # Remove leading and trailing whitespace
-            text = text.replace("\n", "")  # Remove newline character
-            if label != predicted_class:
-                print("Text:", text)
-                print("Label:", label)
-                print("Predicted class:", predicted_class)
-                print()
+    inputs = {
+        'input_ids': input_ids,
+        'attention_mask': attention_mask,
+        'token_type_ids': token_type_ids
+    }
 
-def test_hateBERT():
-    neutral_txt_file = "Data_Gui/neutral_asian_1k.txt"
-    hate_txt_file = "Data_Gui/hate_asian_1k.txt"
-    batches = Batcher(neutral_txt_file, hate_txt_file, batch_size=4)
-    classify_batches(batches)
+    # Measure inference time
+    start = time.time()
+    with torch.no_grad():
+        outputs = model(**inputs)
+    end = time.time()
+
+    assert outputs.logits.shape[0] == 16
+    return end - start

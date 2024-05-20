@@ -1,5 +1,5 @@
 import pandas as pd
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 import torch
 
@@ -40,49 +40,50 @@ def batch_tokenize(texts, tokenizer, batch_size=32):
 def tokenize_function(examples,tokenizer):
     return tokenizer(examples, padding="max_length", truncation=True)
 
-def Spliter(hate_target,neutral_target, tokenizer, test_size=0.2, random_state=42):
-    # Load hate data and Assign label 1 to hate data
+def Spliter_DataLoader(hate_target,neutral_target, tokenizer, batch_size, test_size=0.2, random_state=38, subset_size = 3000):
     hate_data = pd.read_csv(hate_target, header=None, names=['text'])
-    hate_data_text = hate_data["text"].tolist()
-    #Tokenizes before building batches
-    #tokenized_hate_data = batch_tokenize(hate_data_text, tokenizer)
-    #tokenized_hate_data = hate_data.map(tokenizer, batched=True)
-    #hate_data['text'] = hate_data['text'].apply(lambda x: tokenize_function(x, tokenizer))
-    #tokenized_hate_data['label'] = 1
-    hate_data['label'] = 1
-
-    # Load neutral data and Assign label 0 to neutral data
     neutral_data = pd.read_csv(neutral_target, header=None, names=['text'])
-    #neutral_data_text = neutral_data["text"].tolist()
-    # Tokenizes before building batches
-    #tokenized_neutral_data = neutral_data.map(tokenizer, batched=True)
-    #tokenized_neutral_data = batch_tokenize(neutral_data_text, tokenizer)
-    #tokenized_neutral_data['label'] = 0
-    #neutral_data['text'] = neutral_data['text'].apply(lambda x: tokenize_function(x, tokenizer))
-    neutral_data['label'] = 0
 
-    # Concatenate hate and neutral data
-    data = pd.concat([hate_data, neutral_data], ignore_index=True)
+    if subset_size:
+        hate_data = hate_data.sample(subset_size)
+        neutral_data = neutral_data.sample(subset_size)
 
-    #Split the data into a test and training set
-    train_data, test_data = train_test_split(data, test_size=test_size, random_state=random_state)
+    # Tokenize the positive and negative data
+    tokenized_pos_data = hate_data['text'].apply(lambda x: tokenize_text(x, tokenizer))
+    tokenized_neg_data = neutral_data['text'].apply(lambda x: tokenize_text(x, tokenizer))
 
-    return train_data, test_data
+    # Add labels and convert to a suitable format
+    tokenized_pos_data = [{'input_ids': data['input_ids'], 'attention_mask': data['attention_mask'],
+                           'token_type_ids': data['token_type_ids'], 'label': 1} for data in tokenized_pos_data]
+    tokenized_neg_data = [{'input_ids': data['input_ids'], 'attention_mask': data['attention_mask'],
+                           'token_type_ids': data['token_type_ids'], 'label': 0} for data in tokenized_neg_data]
 
+    # Combine the positive and negative data
+    combined_data = tokenized_pos_data + tokenized_neg_data
 
-def prepare_data_loader(train_data, test_data, batch_size):
-    # Create custom datasets
-    train_dataset = CustomDataset(train_data)
-    test_dataset = CustomDataset(test_data)
+    # Convert to DataFrame for easy manipulation
+    combined_df = pd.DataFrame(combined_data)
 
-    #train_dataset = train_data.shuffle(seed=42)
-    #test_dataset = test_data.shuffle(seed=42)
+    # Split the data into training and test sets
+    train_df, test_df = train_test_split(combined_df, test_size=test_size, random_state=random_state)
 
-    #train_loader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
-    #test_loader = DataLoader(test_dataset, shuffle=True, batch_size=batch_size)
+    # Convert the DataFrames to TensorDatasets
+    train_dataset = df_to_tensors(train_df)
+    test_dataset = df_to_tensors(test_df)
 
-    # Create data loaders
+    # Create DataLoaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     return train_loader, test_loader
+
+def tokenize_text(text, tokenizer):
+    return tokenizer(text, padding='max_length', truncation=True, return_tensors='pt')
+
+# Function to convert DataFrame rows to tensors
+def df_to_tensors(df):
+    input_ids = torch.cat(df['input_ids'].values.tolist(), dim=0)
+    attention_mask = torch.cat(df['attention_mask'].values.tolist(), dim=0)
+    token_type_ids = torch.cat(df['token_type_ids'].values.tolist(), dim=0)
+    labels = torch.tensor(df['label'].values)
+    return TensorDataset(input_ids, attention_mask, token_type_ids, labels)

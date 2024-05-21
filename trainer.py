@@ -7,9 +7,16 @@ from transformers import DistilBertForSequenceClassification, AdamW
 from tqdm.auto import tqdm
 import torch.nn as nn
 from sklearn.metrics import f1_score, accuracy_score
+import csv
+import os
 
-MAPPING = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
-MAPPING_INV = {k:v for (k,v) in enumerate(MAPPING)}
+# MAPPING = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
+# MAPPING_INV = {k:v for (k,v) in enumerate(MAPPING)}
+
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities", "others"]
+MAPPING = {OUR_TARGET[i]: i for i in range(len(OUR_TARGET))}
+INV_MAPPING = {v: k for k, v in MAPPING.items()}
+
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
@@ -41,7 +48,7 @@ def model_prediction(model, tokenizer, prompt=None, device = DEVICE):
     predicted_class_id = logits.argmax().item()
     print("Prompt: ", prompt)
     print(" - Predicted class id: ", predicted_class_id)
-    print(" - Predicted category: ", MAPPING_INV[predicted_class_id])
+    print(" - Predicted category: ", INV_MAPPING[predicted_class_id])
 
 
 def read_target_split(file):
@@ -101,15 +108,42 @@ def f1(preds, target):
 def acc(preds, target):
     return accuracy_score(target, preds)
 
+def prepare_data(file_train, file_test):
+    with open(file_train, "w") as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(['target', 'text'])
+
+    with open(file_train, "a"):
+        for file in os.scandir("Data"):
+            df = pd.read_csv(file, header = None, names = ['text'])
+            target = file.name.split("_")[1].split(".")[0]
+            if target == 'other':
+                target = 'others'
+            df['target'] = MAPPING[target]
+
+            df = df[['target', 'text']]
+            df.to_csv(file_train, mode='a', header=False, index=False)
+
+    # Create test file
+    data = pd.read_csv(file_train).sample(5000)
+    data.to_csv(file_test, columns = ['target', 'text'], index = False)
+
 
 if __name__ == "__main__":
 
-    train_texts, train_labels = read_target_split('dataset/no_tone_output.csv')
-    test_texts, test_labels = read_target_split('dataset/no_tone_output_test.csv')
+    FILE_TRAIN = "full_target_id.csv"
+    FILE_TEST  = "full_target_id_test.csv"
+    EPOCHS = 5
+
+
+    prepare_data(FILE_TRAIN, FILE_TEST)
+
+    train_texts, train_labels = read_target_split(FILE_TRAIN)
+    test_texts, test_labels = read_target_split(FILE_TRAIN)
 
     # Split into train and validation sets
     train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=.05)
-    
+
     # Define tokenizer
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
 
@@ -123,11 +157,13 @@ if __name__ == "__main__":
     val_dataset = HATEDataset(val_encodings, val_labels)
     test_dataset = HATEDataset(test_encodings, test_labels)
 
-    # Model training
+    # Model training^
     criterion = nn.CrossEntropyLoss()
     model_ = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=len(MAPPING))
     optim = AdamW(model_.parameters(), lr=5e-5)
 
     metrics = {'ACC': acc, 'F1-weighted': f1}
 
-    loss, metric = model_training(model_, train_dataset, 1, optim, criterion, metrics)
+    loss, metric = model_training(model_, train_dataset, EPOCHS, optim, criterion, metrics)
+
+    torch.save(model_.state_dict(), "model/weights_sentiment_analysis")

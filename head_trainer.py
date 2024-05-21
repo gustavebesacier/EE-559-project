@@ -37,7 +37,14 @@ class HATEDataset(torch.utils.data.Dataset):
 
 
 def model_prediction(model, tokenizer, prompt=None, device = DEVICE):
+    """Use of the model to detect the target from a sentence.
 
+    Args:
+        model: model with pre-loaded weights
+        tokenizer: words tokenizer
+        prompt: prompt to the model, if None it asks user to write.
+        device: Defaults to DEVICE.
+    """
     if not prompt:
         prompt = input("Prompt? ")
     inputs = tokenizer(prompt, return_tensors="pt",  padding = True, truncation = True)
@@ -61,23 +68,27 @@ def read_target_split(file):
     return texts, labels
 
 def prepare_data(file_train, file_test):
+    """Gathers all the prompts from the various files in a file for training, and a file for testing"""
+    
     with open(file_train, "w") as csvfile:
+        # set the header to ['target', 'text']
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['target', 'text'])
 
     with open(file_train, "a"):
         for file in os.scandir(DIR + "Data"):
-            # print("Processing file: ", file.name)
+            # loop over all the files from the folder (one per target/tone)
             try:
               if file.name.split(".")[1] == 'csv':
+                  # only uses csv files - in case of error
                   df = pd.read_csv(file, header = None, names = ['text'])
-                  target = file.name.split("_")[1].split(".")[0]
+                  target = file.name.split("_")[1].split(".")[0] # scrap the target from the file name
                   if target == 'other':
                       target = 'others'
-                  df['target'] = MAPPING[target]
+                  df['target'] = MAPPING[target] # set the id of the target in the file
 
                   df = df[['target', 'text']]
-                  df.to_csv(file_train, mode='a', header=False, index=False)
+                  df.to_csv(file_train, mode='a', header=False, index=False) # save to csv
             except:
               pass
 
@@ -93,20 +104,26 @@ def acc(preds, target):
     return accuracy_score(target, preds)
 
 def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, device = DEVICE):
-    """This function contains lot of parts from EE559 labs, developed by IDIAP lab and is not our work."""
-    # device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    model.to(device)
-    model.train()
+    """This function splits the data into dedicated dataloaders, then performs training on multiple epochs and tests
+    Lots of piece of code are extracted from EE559 labs/exercises and were not created by us but developed by Idiap Research Institute."""
 
+    model.to(device)
+
+    model.train() # set the model in train mode
+
+    # load data
     train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_loader =  DataLoader(test_dataset, batch_size=16, shuffle=True)
 
+    # prepare lists for exporting the metrics
     train_loss = list()
     train_accuray = list()
     train_f1 = list()
     eval_loss = list()
     eval_accuray = list()
     eval_f1 = list()
+
+    all_metrics = list()
 
     for epoch in range(epochs):
 
@@ -115,7 +132,6 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
         ## Do the training
         epoch_loss = 0
         epoch_metrics = dict(zip(metrics.keys(), torch.zeros(len(metrics))))
-
 
         for batch in tqdm(train_loader):
             optimization.zero_grad()
@@ -133,10 +149,11 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
             optimization.step()
 
             with torch.no_grad():
-              for k in epoch_metrics.keys():
-                pred_cpu = pred.cpu()
-                labels_cpu = labels.cpu()
-                epoch_metrics[k] += metrics[k](pred_cpu, labels_cpu)
+                # save the metrics
+                for k in epoch_metrics.keys():
+                    pred_cpu = pred.cpu()
+                    labels_cpu = labels.cpu()
+                    epoch_metrics[k] += metrics[k](pred_cpu, labels_cpu)
 
             epoch_loss += loss.item()
 
@@ -155,6 +172,8 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
           ', '.join(['{}: {:.4f}'.format(k, epoch_metrics[k]) for k in epoch_metrics.keys()]), "\n")
 
         # Evaluate the model
+        
+        model.eval()
         epoch_loss = 0
         epoch_metrics = dict(zip(metrics.keys(), torch.zeros(len(metrics))))
 
@@ -190,18 +209,32 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
         file_path = DIR + "model/log.csv"
 
-        with open(file_path, "w") as file:
-          writer = csv.writer(file)
-          writer.writerow(["epoch", "type", "metric", "value"])
+        # with open(file_path, "w") as file: # export the metrics in a csv file
+        #   writer = csv.writer(file)
+        #   writer.writerow(["epoch", "type", "metric", "value"])
 
-        with open(file_path, "a") as file:
-          writer = csv.writer(file)
+        # with open(file_path, "a", newline="") as file:
+        #     writer = csv.writer(file)
 
-          l = [
-              [epoch, "train", "loss", train_loss[0]], [epoch, "train", "acc", train_accuray[0].item()], [epoch, "train", "f1", train_f1[0].item()],
-              [epoch, "eval", "loss", eval_loss[0]], [epoch, "eval", "acc", eval_accuray[0].item()], [epoch, "eval", "f1", eval_f1[0].item()]]
-          for item in l:
-            writer.writerow(item)
+        #     l = [
+        #         [epoch, "train", "loss", train_loss[0]], [epoch, "train", "acc", train_accuray[0].item()], [epoch, "train", "f1", train_f1[0].item()],
+        #         [epoch, "eval", "loss", eval_loss[0]], [epoch, "eval", "acc", eval_accuray[0].item()], [epoch, "eval", "f1", eval_f1[0].item()]]
+            
+        #     for item in l:
+        #         writer.writerow(item)
+            
+        #     file.close()
+
+        l = [
+            [epoch, "train", "loss", train_loss[0]], [epoch, "train", "acc", train_accuray[0].item()], [epoch, "train", "f1", train_f1[0].item()],
+            [epoch, "eval", "loss", eval_loss[0]], [epoch, "eval", "acc", eval_accuray[0].item()], [epoch, "eval", "f1", eval_f1[0].item()]]
+        all_metrics.append(l)
+
+    with open(file_path, "w") as file:
+        writer = csv.writer(file)
+        for epoch in all_metrics:
+            writer.writerows(epoch)
+
 
     return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1
 
@@ -223,7 +256,7 @@ if __name__ == "__main__":
     train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=.10)
 
     # Define tokenizer
-    tokenizer = DistilBertTokenizerFast.from_pretrained('')
+    tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
 
     # Encode the data
     train_encodings = tokenizer(train_texts, truncation=True, padding=True)

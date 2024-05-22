@@ -10,9 +10,8 @@ from sklearn.metrics import f1_score, accuracy_score
 import csv
 import os
 import matplotlib.pyplot as plt
+from main import OUR_TARGET
 
-
-OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities", "others"]
 MAPPING = {OUR_TARGET[i]: i for i in range(len(OUR_TARGET))}
 INV_MAPPING = {v: k for k, v in MAPPING.items()}
 
@@ -98,9 +97,23 @@ def prepare_data(file_train, file_test):
 
 
 def f1(preds, target):
+    """
+        Compute the F1 score for the given predictions and targets using macro averaging.
+
+        :param preds: The predicted labels.
+        :param target: The true labels.
+        :return: The macro-averaged F1 score.
+        """
     return f1_score(target, preds, average='macro')
 
 def acc(preds, target):
+    """
+        Compute the accuracy score for the given predictions and targets.
+
+        :param preds: The predicted labels.
+        :param target: The true labels.
+        :return: The accuracy score.
+        """
     return accuracy_score(target, preds)
 
 def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, device = DEVICE):

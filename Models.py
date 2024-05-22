@@ -84,6 +84,13 @@ def get_model_size(model, temp_file='temp_model.pth'):
     return None
 
 def get_model_inference_time(model, input_size):
+    """
+        Measure the inference time of a given model on CPU with dummy input data.
+
+        :param model: The model for which to measure inference time.
+        :param input_size: The size of the dummy input data as a tuple.
+        :return: The inference time in seconds.
+        """
     model.to(torch.device("cpu"))
     model.eval()
 

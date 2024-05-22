@@ -1,7 +1,10 @@
 from tqdm.auto import tqdm
 import torch
+import torch.nn.functional as F
 from datasets import load_metric
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from main import OUR_TARGET
+
 
 def load_metrics(*metric_names):
     """
@@ -232,6 +235,18 @@ def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_sche
     return train_loss_log, test_loss_log, distil_loss_log, train_metric_scores, test_metric_scores
 
 def evaluation(model, metrics, test_loader, device, test_metric_scores):
+    """
+        Evaluate the model on a test dataset using specified metrics.
+
+        :param model: The model to be evaluated.
+        :param metrics: A dictionary of metrics to be used for evaluation, where keys are metric names and values are
+        metric objects.
+        :param test_loader: DataLoader for the test dataset.
+        :param device: The device (e.g., 'cpu' or 'cuda') on which to perform evaluation.
+        :param test_metric_scores: A dictionary to store the computed scores of the metrics, where keys are metric names
+         and values are lists of scores.
+        :return: The average evaluation loss over the test dataset.
+        """
     model.eval()
     eval_loss = 0
     print("Evaluation on test set")
@@ -248,7 +263,7 @@ def evaluation(model, metrics, test_loader, device, test_metric_scores):
         eval_loss += outputs.loss.item()
 
         logits = outputs.logits
-        predictions = torch.argmax(logits, dim=-1)
+        predictions = target_finalizer(logits)
         with torch.no_grad():
             for metric_name, metric in metrics.items():
                 metric.add_batch(predictions=predictions, references=labels)
@@ -265,6 +280,15 @@ def evaluation(model, metrics, test_loader, device, test_metric_scores):
     return eval_loss
 
 def inference(model, input, tokenizer, device):
+    """
+        Perform inference using a given model and input.
+
+        :param model: The model to use for inference.
+        :param input: The input data to be tokenized and passed to the model.
+        :param tokenizer: The tokenizer to convert input data into model-compatible tokens.
+        :param device: The device (e.g., 'cpu' or 'cuda') on which to perform inference.
+        :return: The predicted class label as an integer.
+        """
     model.eval()
     tokens = tokenizer(input, return_tensors="pt", padding=True, truncation = True)
     tokens.to(device)
@@ -278,8 +302,15 @@ def inference(model, input, tokenizer, device):
 
     return prediction
 
-# Custom scheduler to combine warmup and cosine annealing
 class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
+    """
+        Custom learning rate scheduler that combines warmup and cosine annealing schedules.
+
+        :param optimizer: The optimizer for which to schedule the learning rate.
+        :param warmup_scheduler: The scheduler used for the warmup phase.
+        :param cosine_scheduler: The scheduler used for the cosine annealing phase.
+        :param num_warmup_steps: The number of steps for the warmup phase.
+        """
     def __init__(self, optimizer, warmup_scheduler, cosine_scheduler, num_warmup_steps):
         self.warmup_scheduler = warmup_scheduler
         self.cosine_scheduler = cosine_scheduler
@@ -299,3 +330,51 @@ class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
         else:
             self.cosine_scheduler.step(epoch)
         self.step_count += 1
+
+
+def target_finalizer(logits, max_target=3, threshold=0.5, min_proba=0.2):
+    """
+    Convert the logits into probability with a softmax and save up the max_target most probable targets to select the
+    right student classes. Normalize the proba to 1
+    :param max_target: Maximum number of target retained
+    :param threshold: When threshold probabilities are attained, no further targets are retained
+    :param min_proba: if no probabilities is higher than min_proba, the target is sent to others.
+    :param logits: logits from the target classification
+    :return sorted_target_proba_normalized: Dict 1<= len(sorted_target_proba_normalized) <= max_target,
+    {target, normalized proba}
+
+    """
+
+    probabilities = F.softmax(logits, dim=1)
+    target_with_proba = {key: value for key, value in zip(OUR_TARGET, probabilities)}
+
+    sorted_target_proba = sorted(target_with_proba.items(), key=lambda item: item[1], reverse=True)
+    sorted_target_proba_dict = dict(sorted_target_proba)
+
+    retained_target_proba = {}
+    if next(iter(sorted_target_proba_dict.values())) < min_proba:
+        sorted_target_proba_normalized = {"others", 1}
+    else:
+        total = 0
+        i = 0
+        while total < threshold and i < max_target:
+            total += list(sorted_target_proba_dict.values())[i]
+            new_entry = sorted_target_proba[i]
+            retained_target_proba[new_entry[0]] = new_entry[1]
+            i += 1
+        # normalize to 1
+        sorted_target_proba_normalized = normalize_proba(retained_target_proba)
+
+    return sorted_target_proba_normalized
+
+
+def normalize_proba(prob_dict):
+    """
+    normalize probabilities from a dict so they sum up to 1
+    :param prob: dict with {target:proba}
+    :return: dict with normalized probabilites
+    """
+    total_prob = sum(prob_dict.values())
+    normalized_dict = {target: prob / total_prob for target, prob in prob_dict.items()}
+
+    return normalized_dict

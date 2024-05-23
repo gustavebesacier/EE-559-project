@@ -57,11 +57,21 @@ def clean_entries(file):
     df.to_csv(file, index=False)
 
 def no_tone_csv(file):
+    """
+        Remove the 'tone' column from a CSV file and save the result to a new CSV file.
+
+        :param file: The path to the input CSV file.
+        """
     df = pd.read_csv(file)#.dropna()
     df.drop(columns=['tone'], inplace=True)
     df.to_csv("dataset/no_tone_output.csv", index=False)
 
 def target_to_nb(file):
+    """
+       Map target categories in a CSV file to numerical values and save the result to a new CSV file.
+
+       :param file: The path to the input CSV file.
+       """
     mapping = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
     df = pd.read_csv(file)
     df["target"] = df["target"].replace(mapping)

@@ -11,6 +11,10 @@ import csv
 import os
 import matplotlib.pyplot as plt
 
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+
 
 OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities", "others"]
 MAPPING = {OUR_TARGET[i]: i for i in range(len(OUR_TARGET))}
@@ -67,6 +71,7 @@ def read_target_split(file):
 
     return texts, labels
 
+
 def prepare_data(file_train, file_test):
     """Gathers all the prompts from the various files in a file for training, and a file for testing"""
     
@@ -99,6 +104,7 @@ def prepare_data(file_train, file_test):
 
 def f1(preds, target):
     return f1_score(target, preds, average='macro')
+
 
 def acc(preds, target):
     return accuracy_score(target, preds)
@@ -138,12 +144,14 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
+
             outputs = model(input_ids, attention_mask=attention_mask, labels=labels)#.cpu()
 
             with torch.no_grad():
                 _, pred = torch.max(outputs.logits, 1)
 
             loss = criterion(outputs.logits, labels)
+            # loss = outputs.loss
 
             loss.backward()
             optimization.step()
@@ -174,8 +182,8 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
         # Evaluate the model
         
         model.eval()
-        epoch_loss = 0
-        epoch_metrics = dict(zip(metrics.keys(), torch.zeros(len(metrics))))
+        epoch_eval_loss = 0
+        epoch_eval_metrics = dict(zip(metrics.keys(), torch.zeros(len(metrics))))
 
         for batch in tqdm(test_loader):
             with torch.no_grad():
@@ -187,47 +195,32 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
                 outputs = model(input_ids, attention_mask=attention_mask, labels=labels)#.cpu()
                 _, pred = torch.max(outputs.logits, 1)
+                loss = outputs.loss
 
                 pred_cpu = pred.cpu()
                 labels_cpu = labels.cpu()
 
-                for k in epoch_metrics.keys():
-                    epoch_metrics[k] += metrics[k](pred_cpu, labels_cpu)
-                epoch_loss += loss.item()
+                for k in epoch_eval_metrics.keys():
+                    epoch_eval_metrics[k] += metrics[k](pred_cpu, labels_cpu)
+                epoch_eval_loss += loss.item()
 
-        epoch_loss /= len(train_loader)
+        epoch_eval_loss /= len(test_loader)
 
-        for k in epoch_metrics.keys():
-          epoch_metrics[k] /= len(train_loader)
+        for k in epoch_eval_metrics.keys():
+          epoch_eval_metrics[k] /= len(test_loader)
 
-        eval_loss.append(epoch_loss)
-        eval_accuray.append(epoch_metrics['ACC'])
-        eval_f1.append(epoch_metrics['F1-weighted'])
+        eval_loss.append(epoch_eval_loss)
+        eval_accuray.append(epoch_eval_metrics['ACC'])
+        eval_f1.append(epoch_eval_metrics['F1-weighted'])
 
-        print('eval Loss: {:.4f}, '.format(epoch_loss),
-          ', '.join(['{}: {:.4f}'.format(k, epoch_metrics[k]) for k in epoch_metrics.keys()]), "\n")
+        print('eval Loss: {:.4f}, '.format(epoch_eval_loss),
+          ', '.join(['{}: {:.4f}'.format(k, epoch_eval_metrics[k]) for k in epoch_eval_metrics.keys()]), "\n")
 
         file_path = DIR + "model/log.csv"
 
-        # with open(file_path, "w") as file: # export the metrics in a csv file
-        #   writer = csv.writer(file)
-        #   writer.writerow(["epoch", "type", "metric", "value"])
-
-        # with open(file_path, "a", newline="") as file:
-        #     writer = csv.writer(file)
-
-        #     l = [
-        #         [epoch, "train", "loss", train_loss[0]], [epoch, "train", "acc", train_accuray[0].item()], [epoch, "train", "f1", train_f1[0].item()],
-        #         [epoch, "eval", "loss", eval_loss[0]], [epoch, "eval", "acc", eval_accuray[0].item()], [epoch, "eval", "f1", eval_f1[0].item()]]
-            
-        #     for item in l:
-        #         writer.writerow(item)
-            
-        #     file.close()
-
         l = [
-            [epoch, "train", "loss", train_loss[0]], [epoch, "train", "acc", train_accuray[0].item()], [epoch, "train", "f1", train_f1[0].item()],
-            [epoch, "eval", "loss", eval_loss[0]], [epoch, "eval", "acc", eval_accuray[0].item()], [epoch, "eval", "f1", eval_f1[0].item()]]
+            [epoch, "train", "loss", epoch_loss], [epoch, "train", "acc", epoch_metrics['ACC'].item()], [epoch, "train", "f1", epoch_eval_metrics['F1-weighted'].item()],
+            [epoch, "eval", "loss", epoch_eval_loss], [epoch, "eval", "acc", epoch_eval_metrics['ACC'].item()], [epoch, "eval", "f1", epoch_eval_metrics['F1-weighted'].item()]]
         all_metrics.append(l)
 
     with open(file_path, "w") as file:
@@ -240,8 +233,11 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
 
 if __name__ == "__main__":
-    FILE_TRAIN = DIR + "full_target_id.csv"
-    FILE_TEST  = DIR + "full_target_id_test.csv"
+    # FILE_TRAIN = DIR + "full_target_id.csv"
+    # FILE_TEST  = DIR + "full_target_id_test.csv"
+
+    FILE_TRAIN = DIR + "small_target_id_test.csv"
+    FILE_TEST  = DIR + "small_target_id.csv"
 
     # Create a single file with all sentences
     # prepare_data(FILE_TRAIN, FILE_TEST)

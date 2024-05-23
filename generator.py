@@ -72,7 +72,9 @@ def target_to_nb(file):
 
        :param file: The path to the input CSV file.
        """
-    mapping = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish': 11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
+    mapping = {'middle_east': 0,'latino': 1,'chinese': 2,'muslim': 3,'bisexual': 4,'mexican': 5,'lgbtq': 6,
+               'physical_disability': 7,'mental_disability': 8,'asian': 9,'women': 10,'jewish':
+                   11,'immigrant': 12,'native_american': 13,'black': 14, 'trans':15}
     df = pd.read_csv(file)
     df["target"] = df["target"].replace(mapping)
     df.to_csv("dataset/no_tone_nbtarget_output.csv", index=False)

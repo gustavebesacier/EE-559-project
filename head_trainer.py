@@ -35,27 +35,6 @@ class HATEDataset(torch.utils.data.Dataset):
         return len(self.labels)
 
 
-def model_prediction(model, tokenizer, prompt=None, device = DEVICE):
-    """Use of the model to detect the target from a sentence.
-
-    Args:
-        model: model with pre-loaded weights
-        tokenizer: words tokenizer
-        prompt: prompt to the model, if None it asks user to write.
-        device: Defaults to DEVICE.
-    """
-    if not prompt:
-        prompt = input("Prompt? ")
-    inputs = tokenizer(prompt, return_tensors="pt",  padding = True, truncation = True)
-    inputs = inputs.to(device)
-
-    with torch.no_grad():
-        logits = model(**inputs.to(device)).logits
-
-    predicted_class_id = logits.argmax().item()
-    print("Prompt: ", prompt)
-    print(" - Predicted class id: ", predicted_class_id)
-    print(" - Predicted category: ", INV_MAPPING[predicted_class_id])
 
 
 def read_target_split(file):

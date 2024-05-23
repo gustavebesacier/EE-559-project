@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from datasets import load_metric
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from main import OUR_TARGET
+from head_trainer import INV_MAPPING
 
 
 def load_metrics(*metric_names):
@@ -124,7 +125,8 @@ def evaluate(model, data_loader, device):
     return metrics
 
 
-def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_scheduler, metrics, train_loader, test_loader, nbr_epochs, device, alpha, T, tokenizer):
+def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_scheduler, metrics, train_loader,
+                      test_loader, nbr_epochs, device, alpha, T, tokenizer):
     """
     Runs the training with distillation on the student model
     Args:
@@ -258,7 +260,8 @@ def evaluation(model, metrics, test_loader, device, test_metric_scores):
         labels = labels.to(device)
 
         with torch.no_grad():
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids,
+                            labels=labels)
 
         eval_loss += outputs.loss.item()
 
@@ -279,11 +282,12 @@ def evaluation(model, metrics, test_loader, device, test_metric_scores):
 
     return eval_loss
 
+
 def inference(model, input, tokenizer, device):
     """
-        Perform inference using a given model and input.
+        Perform inference (hate_speech vs normal language) using a given student model and input.
 
-        :param model: The model to use for inference.
+        :param model: The student model to use for inference.
         :param input: The input data to be tokenized and passed to the model.
         :param tokenizer: The tokenizer to convert input data into model-compatible tokens.
         :param device: The device (e.g., 'cpu' or 'cuda') on which to perform inference.
@@ -332,21 +336,19 @@ class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
         self.step_count += 1
 
 
-def target_finalizer(logits, max_target=3, threshold=0.5, min_proba=0.2):
+def target_classifier(proba, max_target=3, threshold=0.5, min_proba=0.2):
     """
-    Convert the logits into probability with a softmax and save up the max_target most probable targets to select the
-    right student classes. Normalize the proba to 1
+    Use proba to save max_target most probable targets to select the right student classes. Normalize the proba to 1.
     :param max_target: Maximum number of target retained
     :param threshold: When threshold probabilities are attained, no further targets are retained
     :param min_proba: if no probabilities is higher than min_proba, the target is sent to others.
-    :param logits: logits from the target classification
+    :param proba: probabilities from the target classification
     :return sorted_target_proba_normalized: Dict 1<= len(sorted_target_proba_normalized) <= max_target,
     {target, normalized proba}
 
     """
 
-    probabilities = F.softmax(logits, dim=1)
-    target_with_proba = {key: value for key, value in zip(OUR_TARGET, probabilities)}
+    target_with_proba = {key: value for key, value in zip(OUR_TARGET, proba)}
 
     sorted_target_proba = sorted(target_with_proba.items(), key=lambda item: item[1], reverse=True)
     sorted_target_proba_dict = dict(sorted_target_proba)
@@ -371,10 +373,36 @@ def target_finalizer(logits, max_target=3, threshold=0.5, min_proba=0.2):
 def normalize_proba(prob_dict):
     """
     normalize probabilities from a dict so they sum up to 1
-    :param prob: dict with {target:proba}
+    :param prob_dict: dict with {target:proba}
     :return: dict with normalized probabilites
     """
     total_prob = sum(prob_dict.values())
     normalized_dict = {target: prob / total_prob for target, prob in prob_dict.items()}
 
     return normalized_dict
+
+
+def target_inference(model, tokenizer, device, sentence):
+    """ Use the head model to return probabilities for a sentence to be a certain target.
+
+    Args:
+        model: head model with preloaded weights
+        tokenizer: words tokenizer
+        sentence: prompt to the model
+        device: device used for computations
+        
+    Return: array of probabilities where probabilities[i] is the probability that the sentence is directed towards
+    OUR_TARGET[i]
+            
+    """
+    model.eval()
+    tokens = tokenizer(sentence, return_tensors="pt", padding=True, truncation=True)
+    tokens.to(device)
+
+    # inference
+    with torch.no_grad():
+        logits = model(**tokens).logits
+
+    probabilities = F.softmax(logits, dim=1)
+
+    return probabilities

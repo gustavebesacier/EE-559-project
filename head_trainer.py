@@ -10,7 +10,7 @@ from sklearn.metrics import f1_score, accuracy_score
 import csv
 import os
 import matplotlib.pyplot as plt
-from main import OUR_TARGET
+# from main import OUR_TARGET
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -133,8 +133,8 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
     model.train() # set the model in train mode
 
     # load data
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-    test_loader =  DataLoader(test_dataset, batch_size=16, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=40, shuffle=True)
+    test_loader =  DataLoader(test_dataset, batch_size=40, shuffle=True)
 
     # prepare lists for exporting the metrics
     train_loss = list()
@@ -246,37 +246,26 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
     return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1
 
+FILE_TRAIN = DIR + "full_target_id.csv"
+FILE_TEST  = DIR + "full_target_id_test.csv"
+EPOCHS = 5
 
-if __name__ == "__main__":
-    # FILE_TRAIN = DIR + "full_target_id.csv"
-    # FILE_TEST  = DIR + "full_target_id_test.csv"
+def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS, save = True, show = False):
+    """Prepare data, train the model and save weights."""
 
-    FILE_TRAIN = DIR + "small_target_id_test.csv"
-    FILE_TEST  = DIR + "small_target_id.csv"
-
-    # Create a single file with all sentences
-    # prepare_data(FILE_TRAIN, FILE_TEST)
-
-
-    train_texts, train_labels = read_target_split(FILE_TRAIN)
-    test_texts, test_labels = read_target_split(FILE_TRAIN)
+    train_texts, train_labels = read_target_split(path_train)
+    test_texts, test_labels = read_target_split(path_test)
     results_models_weights_dir = DIR + 'model/'
-    EPOCHS = 5
-
-    # Split into train and validation sets
-    train_texts, val_texts, train_labels, val_labels = train_test_split(train_texts, train_labels, test_size=.10)
 
     # Define tokenizer
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
 
     # Encode the data
     train_encodings = tokenizer(train_texts, truncation=True, padding=True)
-    val_encodings = tokenizer(val_texts, truncation=True, padding=True)
     test_encodings = tokenizer(test_texts, truncation=True, padding=True)
 
     # Create instances of HATEDataset (gives all the attributes)
     train_dataset = HATEDataset(train_encodings, train_labels)
-    val_dataset = HATEDataset(val_encodings, val_labels)
     test_dataset = HATEDataset(test_encodings, test_labels)
 
     # Model training
@@ -288,6 +277,98 @@ if __name__ == "__main__":
 
     model_.to(DEVICE)
 
-    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset, val_dataset, EPOCHS, optim, criterion, metrics)
+    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset, test_dataset, epochs, optim, criterion, metrics)
 
     torch.save(model_.state_dict(), results_models_weights_dir + 'weights_sentiment_analysis.pth')
+
+    # get the metrics from the log file    
+    train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1 = get_values_log(DIR + "model/log.csv")
+    
+    # plot and save the result
+    plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, show=show, save=save)
+
+    return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1, model_
+
+
+def get_values_log(log_path = "model/log.csv"):
+    """Parse the log file to get the list of metrics"""
+
+    data = pd.read_csv(log_path, names=['epoch', 'mode', 'metric', 'value'], header=None)
+
+    train_loss = []
+    eval_loss = []
+    train_acc = []
+    eval_acc = []
+    train_f1 = []
+    eval_f1 = []
+
+    for _, row in data.iterrows():
+        if row['mode'] == 'train':
+            if row['metric'] == 'loss':
+                train_loss.append(row['value'])
+            elif row['metric'] == 'acc':
+                train_acc.append(row['value'])
+            elif row['metric'] == 'f1':
+                train_f1.append(row['value'])
+        if row['mode'] == 'eval':
+            if row['metric'] == 'loss':
+                eval_loss.append(row['value'])
+            elif row['metric'] == 'acc':
+                eval_acc.append(row['value'])
+            elif row['metric'] == 'f1':
+                eval_f1.append(row['value'])
+
+    return train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1
+
+
+def plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, show = False, save=True):
+    """Plot the metrics if the training and testing."""
+
+    epochs = [i+1 for i in range(len(train_acc))]
+
+    # We want the 3 plots next to each other
+    _, axs = plt.subplots(1, 3, figsize=(18, 5))
+
+    # Plotting Loss
+    axs[0].plot(epochs, train_loss, marker='o', label='Train Loss')
+    axs[0].plot(epochs, eval_loss, marker='o', label='Eval Loss')
+    axs[0].set_xlabel('Epoch')
+    axs[0].set_ylabel('Loss')
+    axs[0].set_title('Loss over Epochs')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    # Plotting Accuracy
+    axs[1].plot(epochs, train_acc, marker='o', label='Train Accuracy')
+    axs[1].plot(epochs, eval_acc, marker='o', label='Eval Accuracy')
+    axs[1].set_xlabel('Epoch')
+    axs[1].set_ylabel('Accuracy')
+    axs[1].set_title('Accuracy over Epochs')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    # Plotting F1 Score
+    axs[2].plot(epochs, train_f1, marker='o', label='Train F1 Score')
+    axs[2].plot(epochs, eval_f1, marker='o', label='Eval F1 Score')
+    axs[2].set_xlabel('Epoch')
+    axs[2].set_ylabel('F1 Score')
+    axs[2].set_title('F1 Score over Epochs')
+    axs[2].legend()
+    axs[2].grid(True)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    if save:
+        plt.savefig(DIR + "model/metrics")
+
+    if show:
+        plt.show()
+
+
+if __name__ == "__main__":
+
+    small_test  = DIR + "small_target_id_test.csv"
+    small_train = DIR + "small_target_id.csv"
+
+    run_training(small_train, small_test, 5)

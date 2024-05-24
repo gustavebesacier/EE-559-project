@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from transformers import DistilBertTokenizerFast
 import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader
 from transformers import DistilBertForSequenceClassification, AdamW
 from tqdm.auto import tqdm
@@ -10,6 +11,7 @@ from sklearn.metrics import f1_score, accuracy_score
 import csv
 import os
 import matplotlib.pyplot as plt
+from transformers import get_linear_schedule_with_warmup
 # from main import OUR_TARGET
 
 import warnings
@@ -28,6 +30,34 @@ FILE_TRAIN = DIR + "full_target_id.csv"
 FILE_TEST  = DIR + "full_target_id_test.csv"
 EPOCHS = 5
 
+class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
+    """
+        Custom learning rate scheduler that combines warmup and cosine annealing schedules.
+
+        :param optimizer: The optimizer for which to schedule the learning rate.
+        :param warmup_scheduler: The scheduler used for the warmup phase.
+        :param cosine_scheduler: The scheduler used for the cosine annealing phase.
+        :param num_warmup_steps: The number of steps for the warmup phase.
+        """
+    def __init__(self, optimizer, warmup_scheduler, cosine_scheduler, num_warmup_steps):
+        self.warmup_scheduler = warmup_scheduler
+        self.cosine_scheduler = cosine_scheduler
+        self.num_warmup_steps = num_warmup_steps
+        self.step_count = 0
+        super().__init__(optimizer)
+
+    def get_lr(self):
+        if self.step_count < self.num_warmup_steps:
+            return self.warmup_scheduler.get_last_lr()
+        else:
+            return self.cosine_scheduler.get_last_lr()
+
+    def step(self, epoch=None):
+        if self.step_count < self.num_warmup_steps:
+            self.warmup_scheduler.step()
+        else:
+            self.cosine_scheduler.step(epoch)
+        self.step_count += 1
 
 class HATEDataset(torch.utils.data.Dataset):
     """Permits to have correctly composed datasets"""
@@ -70,11 +100,11 @@ def model_prediction(model, tokenizer, prompt=None, device = DEVICE):
 def read_target_split(file):
     """convert the dataset into one list for text and one for labels"""
     data = pd.read_csv(file)
+    data = clean_semicolumns(data)
     texts = data.text.to_list()
     labels = data.target.replace(MAPPING).to_list()
 
     return texts, labels
-
 
 def prepare_data(file_train, file_test):
     """Gathers all the prompts from the various files in a file for training, and a file for testing"""
@@ -100,10 +130,29 @@ def prepare_data(file_train, file_test):
                   df.to_csv(file_train, mode='a', header=False, index=False) # save to csv
             except:
               pass
+    # Remove duplicates
+    train = pd.read_csv(file_train)
+    train = train.drop_duplicates()
+    train = clean_semicolumns(train)
+    train.to_csv(file_train)
 
     # Create test file
-    data = pd.read_csv(file_train).sample(1000)
+    data = train.sample(1000)
+
     data.to_csv(file_test, columns = ['target', 'text'], index = False)
+    
+
+def clean_semicolumns(data):
+    for name in data.columns.tolist():
+        if ":" in name:
+            data = data.drop([name], axis =1)
+    return data
+
+def get_weight_classes(data):
+    "Takes a dataframe and returns a list of the frequency of each target"
+    value_counts = data['target'].value_counts()
+    weights = [elem[1]/len(data) for elem in sorted(value_counts.items())]
+    return weights
 
 
 def f1(preds, target):
@@ -127,7 +176,7 @@ def acc(preds, target):
         """
     return accuracy_score(target, preds)
 
-def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, device = DEVICE):
+def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, lr_scheduler, device = DEVICE):
     """This function splits the data into dedicated dataloaders, then performs training on multiple epochs and tests
     Lots of piece of code are extracted from EE559 labs/exercises and were not created by us but developed by Idiap Research Institute."""
 
@@ -173,6 +222,7 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
             loss.backward()
             optimization.step()
+            lr_scheduler.step()
 
             with torch.no_grad():
                 # save the metrics
@@ -253,6 +303,15 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS, save = True, show = False):
     """Prepare data, train the model and save weights."""
 
+    # prepare_data(path_train, path_test)
+
+    # Get the relative weight of each classes
+    data = pd.read_csv(path_train)
+    data = clean_semicolumns(data)
+    weights_targets = get_weight_classes(data)
+    weights_targets = torch.tensor(weights_targets)
+
+    # Split the data
     train_texts, train_labels = read_target_split(path_train)
     test_texts, test_labels = read_target_split(path_test)
     results_models_weights_dir = DIR + 'model/'
@@ -269,17 +328,41 @@ def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS,
     test_dataset = HATEDataset(test_encodings, test_labels)
 
     # Model training
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=weights_targets)
     model_ = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=len(MAPPING))
-    optim = AdamW(model_.parameters(), lr=5e-5)
+    
+    # load previous weights
+    weights_path = results_models_weights_dir + 'weights_sentiment_analysis.pth'
+    
+    if weights_path is not None:
+        # Load the state dictionary directly
+        state_dict = torch.load(weights_path)
+        model_.load_state_dict(state_dict)
+    
+    optimizer = AdamW(model_.parameters(), lr=5e-5)
+
+    num_training_steps = epochs * len(train_dataset)
+    T_0 = 1     # Number of epochs for the first restart
+    T_mult = 2  # Increase in the cycles
+    num_warmup_steps = 50
+
+    # Create the linear warmup scheduler
+    warmup_scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=num_warmup_steps,
+                                                       num_training_steps=num_training_steps)
+
+    # Create the cosine annealing with warm restarts scheduler
+    cosine_scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=T_0, T_mult=T_mult, eta_min=5e-10)
+
+    # Combine the warmup and cosine annealing schedulers
+    lr_scheduler = WarmupThenCosineScheduler(optimizer, warmup_scheduler, cosine_scheduler, num_warmup_steps)
 
     metrics = {'ACC': acc, 'F1-weighted': f1}
 
     model_.to(DEVICE)
 
-    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset, test_dataset, epochs, optim, criterion, metrics)
+    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset, test_dataset, epochs, optimizer, criterion, metrics, lr_scheduler=lr_scheduler)
 
-    torch.save(model_.state_dict(), results_models_weights_dir + 'weights_sentiment_analysis.pth')
+    torch.save(model_.state_dict(), weights_path)
 
     # get the metrics from the log file    
     train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1 = get_values_log(DIR + "model/log.csv")
@@ -368,7 +451,11 @@ def plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, 
 
 if __name__ == "__main__":
 
-    small_test  = DIR + "small_target_id_test.csv"
-    small_train = DIR + "small_target_id.csv"
+    # small_test  = DIR + "small_target_id_test.csv"
+    # small_train = DIR + "small_target_id.csv"
 
-    run_training(small_train, small_test, 5)
+
+    FILE_TRAIN = "full_target.csv"
+    FILE_TEST  = "full_target_test.csv"
+
+    run_training(FILE_TRAIN, FILE_TEST, 11)

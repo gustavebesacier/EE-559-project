@@ -44,25 +44,25 @@ def main():
 
     # get weight path for student and head
 
+    weights_path_head, weights_paths_student = None, None
     if inference:
-        weight_path_head = "logs_and_weights\head_path"
-        weight_path_student = "logs_and_weights\student_path"
+        weights_path_head = "logs_and_weights\head_path"
+        weights_paths_student = {target: f'logs_and_weights/{target}_weights.pth' for target in OUR_TARGET}
 
     # Create the head_model
-    head_model = create_head_model(weights_path=None)
+    head_model = create_head_model(weights_path_head)
 
-    # TODO: 1)create create_head_model 2)create the files for weights path, test inference with a sentences.txt
+    # TODO: 1)create create_head_model
 
     # Create the teacher_model
-    teacher_model = create_teacher_model(weights_path=None)
+    teacher_model = create_teacher_model(weights_path_head)
 
     # define a dictionary linking a student model to a specific target
-    target_models = {target: create_student_model(weights_path=None, num_classes=2) for target in OUR_TARGET}
+    target_models = {target: create_student_model(weights_path=weights_paths_student[target],
+                                                  num_classes=2) for target in OUR_TARGET}
 
     # Create the tokenizer
     tokenizer = BertTokenizer.from_pretrained("hate_bert")
-
-
 
     # Return the final probability of hate_speech for given sentences (inference mode)
     if inference:

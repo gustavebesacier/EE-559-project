@@ -24,6 +24,9 @@ INV_MAPPING = {v: k for k, v in MAPPING.items()}
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 DIR = os.getcwd() + "/"
+FILE_TRAIN = DIR + "full_target_id.csv"
+FILE_TEST  = DIR + "full_target_id_test.csv"
+EPOCHS = 5
 
 
 class HATEDataset(torch.utils.data.Dataset):
@@ -133,8 +136,8 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
     model.train() # set the model in train mode
 
     # load data
-    train_loader = DataLoader(train_dataset, batch_size=40, shuffle=True)
-    test_loader =  DataLoader(test_dataset, batch_size=40, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True)
+    test_loader =  DataLoader(test_dataset, batch_size=50, shuffle=True)
 
     # prepare lists for exporting the metrics
     train_loss = list()
@@ -246,9 +249,6 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
 
     return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1
 
-FILE_TRAIN = DIR + "full_target_id.csv"
-FILE_TEST  = DIR + "full_target_id_test.csv"
-EPOCHS = 5
 
 def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS, save = True, show = False):
     """Prepare data, train the model and save weights."""
@@ -290,7 +290,7 @@ def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS,
     return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1, model_
 
 
-def get_values_log(log_path = "model/log.csv"):
+def get_values_log(log_path):
     """Parse the log file to get the list of metrics"""
 
     data = pd.read_csv(log_path, names=['epoch', 'mode', 'metric', 'value'], header=None)

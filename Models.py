@@ -4,15 +4,19 @@ import torch
 import os
 import time
 
-def create_student_model(num_classes = 2, transformer_size = 256, nbr_layers = 4, nbr_heads = 4):
+
+def create_student_model(weights_path=None, num_classes=2, transformer_size=256, nbr_layers=4,
+                         nbr_heads=4):
     """
     Creates a student model
+    :param weights_path: path to the weights
     :param num_classes: different number of labels
     :param transformer_size: size of the transformer
     :param nbr_layers: nbr of hidden layers
     :param nbr_heads: number of attention heads
     :return: a new student model
     """
+
     #Configure the student model
     config = BertConfig(
         num_labels=num_classes,
@@ -23,6 +27,10 @@ def create_student_model(num_classes = 2, transformer_size = 256, nbr_layers = 4
 
     #Create the model using previous config
     student_model = BertForSequenceClassification(config)
+    if weights_path is not None:
+        # Load the model directly
+        state_dict = torch.load(weights_path)
+        student_model.load_state_dict(state_dict)
 
     return student_model
 
@@ -34,8 +42,9 @@ def create_teacher_model(weights_path = None):
     teacher_model = BertForSequenceClassification.from_pretrained("hate_bert")
 
     if weights_path is not None:
-        weights_pretrained = torch.load(weights_path)
-        teacher_model.load_state_dict(weights_pretrained['model_state_dict'])
+        # Load the state dictionary directly
+        state_dict = torch.load(weights_path)
+        teacher_model.load_state_dict(state_dict)
 
     return teacher_model
 

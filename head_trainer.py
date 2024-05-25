@@ -453,9 +453,11 @@ if __name__ == "__main__":
 
     # small_test  = DIR + "small_target_id_test.csv"
     # small_train = DIR + "small_target_id.csv"
+    
+    # run_training(small_train, small_test, 2)
 
 
     FILE_TRAIN = "full_target.csv"
     FILE_TEST  = "full_target_test.csv"
-
-    run_training(FILE_TRAIN, FILE_TEST, 11)
+    
+    run_training(FILE_TRAIN, FILE_TEST, 2)

@@ -32,13 +32,15 @@ The following library are used:
 ## Files 📁
 
 ### Main files
-TO BE ADDED
+- Data_Handler.py: handles all data from different sources.
+- Datasets_Batches.py: prepares (tokenization, tensorization) data to input the different models.
+- head_trainer.py: trains the head classifier.
+- Models.py: creates the students and the teacher models, and computes metrics.
+- Octopus.py: link between the head classifier and the student models.
+- Running.py: performs the training and evaluation of student models, and inference. 
 
 ### Data
 The data is in different formats (csv and txt), gathered from different datasets. More details and explanations are in the report. 
-
-### Data_Processing 
-TO BE ADDED
 
 
 ## Usage 🫳

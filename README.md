@@ -42,6 +42,8 @@ The following library are used:
 ### Data
 The data is in different formats (csv and txt), gathered from different datasets. More details and explanations are in the report. 
 
+### Training weights
+The training weights are available on request on a google drive repository.
 
 ## Usage 🫳
 The code can be downloaded on the GitHub repository together with the data. Usage is of a standard Python code.
@@ -52,7 +54,6 @@ Disclaimer: this repository contains potential harmful sentences towards minorit
 Guillaume Ferrer: guillaume.ferrer@epfl.ch
 Clément Renard:   clement.renard@epfl.ch
 Gustave Besacier  gustave.besacier@epfl.ch
-
 
 ## Acknowledgments 🤗
 

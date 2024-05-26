@@ -6,49 +6,52 @@ import os
 from csv import writer
 from tqdm import tqdm
 import datasets
+from pathlib import Path
+import csv
 
-
-#18 targets
-HATEXPLAIN_TARGET = ["African","Arabs","Asian","Caucasian","Hispanic","Buddhism","Christian","Hindu","Islam","Jewish",
-                     "Men","Women","Heterosexual","Gay","Indigenous","Refugee/Immigrant","None","Others"]
+# 18 targets
+HATEXPLAIN_TARGET = ["African", "Arabs", "Asian", "Caucasian", "Hispanic", "Buddhism", "Christian", "Hindu", "Islam",
+                     "Jewish",
+                     "Men", "Women", "Heterosexual", "Gay", "Indigenous", "Refugee/Immigrant", "None", "Others"]
 
 OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab",
               "disabilities", "others"]
 
 DIC_TARGET = {
-    'none':                 'others',
-    'african':              'black',
-    'asian':                'asian',
-    'caucasian':            'others',
-    'women':                'women',
-    'jewish':               'jews',
-    'islam':                'muslim',
-    'hispanic':             'latino',
-    'indigenous':           'indigenous',
-    'men':                  'others',
-    'christian':            'others',
-    'heterosexual':         'others',
-    'hindu':                'others',
-    'buddhism':             'others',
-    'bisexual':             'lgbtq',
-    'chinese':              'asian',
-    'black':                'black',
-    'immigrant':            'others',
-    'lgbt':                 'lgbtq',
-    'mental_disability':    'others',
-    'mexican':              'others',
-    'middle_east':          'arab',
-    'muslim':               'muslim',
-    'native_american':      'indigenous',
-    'physical_disability':  'others',
-    'trans':                'lgbtq',
-    'lgbtq':                'lgbtq',
-    'latino':               'latino'
-    }
+    'none': 'others',
+    'african': 'black',
+    'asian': 'asian',
+    'caucasian': 'others',
+    'women': 'women',
+    'jewish': 'jews',
+    'islam': 'muslim',
+    'hispanic': 'latino',
+    'indigenous': 'indigenous',
+    'men': 'others',
+    'christian': 'others',
+    'heterosexual': 'others',
+    'hindu': 'others',
+    'buddhism': 'others',
+    'bisexual': 'lgbtq',
+    'chinese': 'asian',
+    'black': 'black',
+    'immigrant': 'others',
+    'lgbt': 'lgbtq',
+    'mental_disability': 'others',
+    'mexican': 'others',
+    'middle_east': 'arab',
+    'muslim': 'muslim',
+    'native_american': 'indigenous',
+    'physical_disability': 'others',
+    'trans': 'lgbtq',
+    'lgbtq': 'lgbtq',
+    'latino': 'latino'
+}
 
 TARGET_CONVERTER = {1: 'hate', 0: 'neutral'}
 
 N_TARGET_XPLAIN = 18
+
 
 def read_text_file(filename):
     """
@@ -131,7 +134,7 @@ def hateXplain_parser(filename="dataset_hateXplain.json"):
 
             data_for_a_sentence_without_s = hateXplain_builder(labels + targets_flat)
             if data_for_a_sentence_without_s.size != 0:
-                sentences = np.full((data_for_a_sentence_without_s.shape[0],1), sentence)
+                sentences = np.full((data_for_a_sentence_without_s.shape[0], 1), sentence)
                 data_for_a_sentence = np.hstack((data_for_a_sentence_without_s, sentences))
                 data_matrix = np.vstack((data_matrix, data_for_a_sentence))
 
@@ -152,7 +155,7 @@ def hateXplain_builder(brut):
     toxic = 0
     toxic_count = 0
     for i in range(0, 3):
-        if brut[i] == "hatespeech": #or brut[i] == "offensive":
+        if brut[i] == "hatespeech":  # or brut[i] == "offensive":
             toxic_count += 1
     if toxic_count >= 2:
         toxic = 1
@@ -170,7 +173,7 @@ def hateXplain_builder(brut):
         n_processed = sum(1 for val in annotation if val >= 1)
         processed_matrix = np.full((n_processed, 1), toxic)
         targets = np.array([HATEXPLAIN_TARGET[i] for i in range(N_TARGET_XPLAIN)
-                            if annotation[i] >= 1]).reshape(n_processed,1)
+                            if annotation[i] >= 1]).reshape(n_processed, 1)
     else:
         n_processed = sum(1 for val in annotation if val >= 2)
         processed_matrix = np.full((n_processed, 1), toxic)
@@ -181,12 +184,14 @@ def hateXplain_builder(brut):
 
     return final_matrix
 
+
 def create_files(list_target):
     """For each target and tone, creates an empty file if not already existing or only open it"""
     for target in list_target:
         for tone in ['hate', 'neutral']:
             with open(f'Data/{tone}_{target}.csv', 'w') as _:
                 pass
+
 
 def clean_folder():
     """Clear the folder 'Data'."""
@@ -196,12 +201,14 @@ def clean_folder():
                 os.unlink(entry.path)
         print("All files from 'Data' deleted successfully.")
 
+
 def write_entry(tone, target, entry):
     """Given a tone (hate/neutral)"""
     with open(f'Data/{tone}_{target}.csv', 'a') as f:
         writer_object = writer(f)
         writer_object.writerow([entry])
         f.close()
+
 
 def assign_target(tone, target, entry):
     """
@@ -210,8 +217,8 @@ def assign_target(tone, target, entry):
     """
     write_entry(tone, DIC_TARGET[target], entry)
 
-def data_collection(source="dataset_hateXplain.csv"):
 
+def data_collection(source="dataset_hateXplain.csv"):
     if source == "dataset_hateXplain.csv":
         with open("dataset_hateXplain.csv") as f:
             lines = f.readlines()[2:]
@@ -220,7 +227,7 @@ def data_collection(source="dataset_hateXplain.csv"):
                 tone, target, entry = entry[0], entry[1].lower(), entry[2]
                 # use the mapping from TARGET_CONVERTER to turn the 0/1 to neutral/hate
                 assign_target(TARGET_CONVERTER[int(tone)], target, entry.strip())
-    
+
     else:
         with open(source) as f:
             lines = f.readlines()[1:]
@@ -230,7 +237,7 @@ def data_collection(source="dataset_hateXplain.csv"):
                 assign_target(tone, target, entry.strip())
 
 
-def setup_data(targets,dataset_list):
+def setup_data(targets, dataset_list):
     # Empty the folder
     clean_folder()
 
@@ -245,11 +252,11 @@ def setup_data(targets,dataset_list):
     # Add data from Toxigen
     data_collection("dataset/output.csv")
 
-    #HuggingFace data
+    # HuggingFace data
     measuring_hate_speech_parser()
 
     for target in targets:
-        #Clean the duplicates from the datasets
+        # Clean the duplicates from the datasets
         hate_target = dataset_list[target]["hate"]
         neutral_target = dataset_list[target]["neutral"]
         remove_duplicates_in_place(hate_target)
@@ -277,6 +284,7 @@ def measuring_hate_speech_file_builder(df_target, target):
 
     # Append non-toxic sentences to Data/neutral_{target}.csv
     non_toxic_sentences.to_csv(f"Data/neutral_{target}.csv", mode='a', index=False, header=False)
+
 
 def measuring_hate_speech_parser():
     """
@@ -309,6 +317,7 @@ def measuring_hate_speech_parser():
         for column_index in mapping[target]:
             measuring_hate_speech_file_builder(df[df.iloc[:, column_index] == True], target)
 
+
 def remove_duplicates_in_place(file_path):
     # Load the dataset, specifying no header and treating each line as a separate row
     df = pd.read_csv(file_path, header=None)
@@ -319,7 +328,8 @@ def remove_duplicates_in_place(file_path):
     # Overwrite the original file with the cleaned dataset
     df_cleaned.to_csv(file_path, index=False, header=False)
 
-def full_data_generator(targets,data):
+
+def full_data_generator(targets, data):
     # Initialize empty dataframes for concatenating the data
     all_hate_data = pd.DataFrame()
     all_neutral_data = pd.DataFrame()
@@ -343,6 +353,7 @@ def full_data_generator(targets,data):
 
     remove_duplicates_in_place("hate_all.csv")
     remove_duplicates_in_place("neutral_all.csv")
+    concatenate_csv("hate_all.csv", "neutral_all.csv", "all.csv")
 
 
 def data_summary(targets, dataframes):
@@ -360,3 +371,122 @@ def data_summary(targets, dataframes):
     neutral_data = pd.read_csv("neutral_all.csv", header=None, names=['text'])
 
     print(f"Averall has {len(hate_data)} hate sentences and {len(neutral_data)} neutral ones")
+
+
+def data_for_multilabel_classification(folder="dataset", hate_all_path="hate_all.csv",
+                                       neutral_all_path="neutral_all.csv"):
+    """
+    Convert the data from the file dataset in a format adapted for multilabel classification ex: [0,1,0,1,1,0,0,...]
+
+        Args:
+            folder: name of the folder containing the datasets organized by hate/neutral_target.csv
+            hate_all_path: path to all sentences of hate
+            neutral_all_path: path to all neutral sentences
+
+        Save:
+            .csv file, with in each row:  sentence,targets. Where target is a list
+            of size OUR_TARGET where every 1 in position i indicate that the sentence target the group OUR_TARGET[i]
+
+    """
+
+    # create the files to return
+    with open("data_multilabel_head", 'w', newline='') as file:
+        writer2 = csv.writer(file)
+        writer2.writerow(['text', 'labels'])
+
+    folder_path = Path(folder)
+
+    # append the sentences and the targets
+    with open("all.csv", 'r', encoding="utf8") as all:
+        for s in all:
+            s_to_compare = s.strip()
+            targets = [0] * 11
+            for file_path in folder_path.iterdir():
+                with file_path.open('r', encoding="utf-8") as file:
+                    reader = csv.reader(file)
+                    for sentence in reader:
+                        if sentence[0] == s_to_compare:
+                            add_one(extract_target(file_path.name), targets)
+            with open("data_multilabel_head", 'a', newline='', encoding="utf8") as file:
+                writer2 = csv.writer(file)
+                writer2.writerow([s_to_compare, targets])
+
+
+def add_one(target, targets):
+    """
+    Takes a list of targets and update at the right position if adding target is needed
+    Args:
+        target: string,the specific target to add
+        targets: list of binary int the list of targets for a sentence
+
+    Returns: updated list of target
+
+    """
+    if target in OUR_TARGET:
+        index = OUR_TARGET.index(target)
+        targets[index] = 1
+    return targets
+
+
+def extract_target(filename):
+    """
+    Extracts targets from filename
+    Args:
+        filename: The directory to extract the name
+    Returns:
+        targets
+    """
+    target = filename[:-4].split('_')[1]
+
+    return target
+
+
+def concatenate_csv(file1, file2, output_file):
+    """
+    Concatenates two CSV files
+
+    Args:
+     file1: Path to CSV file.
+     file2: Path to CSV file.
+     output_file: Path to the output file to save the concatenated CSV data.
+    """
+
+    with open(file1, 'r', newline='', encoding="utf-8") as input_csv1:
+        reader1 = csv.reader(input_csv1)
+        data1 = list(reader1)
+
+    with open(file2, 'r', newline='', encoding="utf-8") as input_csv2:
+        reader2 = csv.reader(input_csv2)
+        data2 = list(reader2)
+
+    data1.extend(data2)
+
+    with open(output_file, 'w', newline='', encoding="utf-8") as output_csv:
+        writer3 = csv.writer(output_csv)
+        writer3.writerows(data1)
+
+
+def test_file(filename="Data/demo_train.csv"):
+    # Initialize lists to store labels and text
+    labels = []
+    text_lines = []
+
+    # Open and read the CSV file
+    with open(filename, 'r', encoding='utf-8') as csvfile:
+        csvreader = csv.reader(csvfile)
+        for row in csvreader:
+            # Append the number to the labels list
+            labels.append(int(row[0]))
+            # Append the text to the text_lines list
+            text_lines.append(row[1])
+
+    # Convert the labels list to a NumPy array
+    labels_array = np.array(labels)
+
+    # Save the text lines to a text file
+    with open('output.txt', 'w', encoding='utf-8') as txtfile:
+        for line in text_lines:
+            txtfile.write(line + '\n')
+
+    # Save the labels array to a .npy file if needed
+    np.save('labels.npy', labels_array)

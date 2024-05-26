@@ -3,8 +3,10 @@ import torch
 import torch.nn.functional as F
 from datasets import load_metric
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from main import OUR_TARGET
-from head_trainer import INV_MAPPING
+import numpy as np
+
+OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities",
+              "others"]
 
 
 def load_metrics(*metric_names):
@@ -21,7 +23,8 @@ def load_metrics(*metric_names):
         metrics[metric_name] = load_metric(metric_name)
     return metrics
 
-def trainer(model, optimizer,nbr_steps, lr_scheduler, train_loader, nbr_epochs, device):
+
+def trainer(model, optimizer, nbr_steps, lr_scheduler, train_loader, nbr_epochs, device):
     """
     This is a simple train function given a model
     Main goal is to specialize pretrained model
@@ -51,7 +54,8 @@ def trainer(model, optimizer,nbr_steps, lr_scheduler, train_loader, nbr_epochs, 
             labels = labels.to(device)
 
             # Forward pass
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids,
+                            labels=labels)
             loss = outputs.loss
             total_loss += loss.item()
 
@@ -61,7 +65,7 @@ def trainer(model, optimizer,nbr_steps, lr_scheduler, train_loader, nbr_epochs, 
             optimizer.step()
             lr_scheduler.step()
 
-            #clean optimizer
+            # clean optimizer
             optimizer.zero_grad()
 
             if step % 100 == 0 and step != 0:
@@ -125,8 +129,8 @@ def evaluate(model, data_loader, device):
     return metrics
 
 
-def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_scheduler, metrics, train_loader,
-                      test_loader, nbr_epochs, device, alpha, T, tokenizer):
+def trainer_distiller(student_model, teacher_model, optimizer, nbr_steps, lr_scheduler, metrics, train_loader,
+                      test_loader, nbr_epochs, device, alpha, T):
     """
     Runs the training with distillation on the student model
     Args:
@@ -162,12 +166,12 @@ def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_sche
     train_metric_scores = {metric_name: [] for metric_name in metric_name_list}
     test_metric_scores = {metric_name: [] for metric_name in metric_name_list}
 
-    #define loss metric
+    # define loss metric
     kl_loss = torch.nn.KLDivLoss(reduction="batchmean")
 
     for epoch in range(nbr_epochs):
         print("Epoch {0} of {1}".format(epoch, nbr_epochs))
-        #Run diagnostics
+        # Run diagnostics
         model_loss = 0
         distil_loss = 0
 
@@ -178,16 +182,17 @@ def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_sche
             token_type_ids = token_type_ids.to(device)
             labels = labels.to(device)
 
-
             with torch.no_grad():
-                teacher_outputs = teacher_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
-            student_outputs = student_model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
+                teacher_outputs = teacher_model(input_ids=input_ids, attention_mask=attention_mask,
+                                                token_type_ids=token_type_ids, labels=labels)
+            student_outputs = student_model(input_ids=input_ids, attention_mask=attention_mask,
+                                            token_type_ids=token_type_ids, labels=labels)
 
             # Perform the Kullback–Leibler divergence
             student_p = torch.softmax(student_outputs.logits / T, dim=-1)
             teacher_q = torch.softmax(teacher_outputs.logits / T, dim=-1)
 
-            #Compute the KL divergence
+            # Compute the KL divergence
             kl_divergence = kl_loss(student_p, teacher_q) * (T ** 2)
 
             # Compute the student loss and knowledge loss
@@ -198,10 +203,10 @@ def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_sche
             loss = (1. - alpha) * student_loss + alpha * kl_divergence
             distil_loss += loss.item()
 
-            #Update weights
+            # Update weights
             loss.backward()
 
-            #update the optimizer
+            # update the optimizer
             optimizer.step()
             lr_scheduler.step()
 
@@ -230,11 +235,12 @@ def trainer_distiller(student_model, teacher_model, optimizer,nbr_steps, lr_sche
             print(f"{metric_name.capitalize()}:", score)
             train_metric_scores[metric_name].append(score)
 
-        #Evaluation on test set
+        # Evaluation on test set
         eval_loss = evaluation(student_model, metrics, test_loader, device, test_metric_scores)
         test_loss_log.append(eval_loss)
 
     return train_loss_log, test_loss_log, distil_loss_log, train_metric_scores, test_metric_scores
+
 
 def evaluation(model, metrics, test_loader, device, test_metric_scores):
     """
@@ -266,7 +272,7 @@ def evaluation(model, metrics, test_loader, device, test_metric_scores):
         eval_loss += outputs.loss.item()
 
         logits = outputs.logits
-        predictions = target_finalizer(logits)
+        predictions = torch.argmax(outputs.logits, dim=-1)
         with torch.no_grad():
             for metric_name, metric in metrics.items():
                 metric.add_batch(predictions=predictions, references=labels)
@@ -294,17 +300,20 @@ def inference(model, input, tokenizer, device):
         :return: The predicted class label as an integer.
         """
     model.eval()
-    tokens = tokenizer(input, return_tensors="pt", padding=True, truncation = True)
+    tokens = tokenizer(input, return_tensors="pt", padding=True, truncation=True)
     tokens.to(device)
 
-    #inference
+    # inference
     with torch.no_grad():
         logits = model(**tokens).logits
 
-    #predict
-    prediction = logits.argmax().item()
+    # predict
+    #prediction = logits.argmax().item()
+    probabilities = F.softmax(logits, dim=-1)
+    hate_proba = probabilities[0, 1]
 
-    return prediction
+    return (hate_proba.numpy())
+
 
 class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
     """
@@ -315,6 +324,7 @@ class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
         :param cosine_scheduler: The scheduler used for the cosine annealing phase.
         :param num_warmup_steps: The number of steps for the warmup phase.
         """
+
     def __init__(self, optimizer, warmup_scheduler, cosine_scheduler, num_warmup_steps):
         self.warmup_scheduler = warmup_scheduler
         self.cosine_scheduler = cosine_scheduler
@@ -347,7 +357,7 @@ def target_classifier(proba, max_target=3, threshold=0.5, min_proba=0.2):
     {target, normalized proba}
 
     """
-
+    proba = proba.tolist()[0]
     target_with_proba = {key: value for key, value in zip(OUR_TARGET, proba)}
 
     sorted_target_proba = sorted(target_with_proba.items(), key=lambda item: item[1], reverse=True)
@@ -390,19 +400,23 @@ def target_inference(model, tokenizer, device, sentence):
         tokenizer: words tokenizer
         sentence: prompt to the model
         device: device used for computations
-        
+
     Return: array of probabilities where probabilities[i] is the probability that the sentence is directed towards
     OUR_TARGET[i]
-            
+
     """
+    model.to(device)
     model.eval()
     tokens = tokenizer(sentence, return_tensors="pt", padding=True, truncation=True)
-    tokens.to(device)
+    tokens = tokens.to(device)
+    input_ids = tokens["input_ids"].to(device)
+    attention_mask = tokens["attention_mask"].to(device)
 
-    # inference
     with torch.no_grad():
-        logits = model(**tokens).logits
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 
-    probabilities = F.softmax(logits, dim=1)
+    logits = outputs.logits
+    probabilities = F.softmax(logits, dim=-1)
+    proba = torch.Tensor.numpy(probabilities)
 
-    return probabilities
+    return proba

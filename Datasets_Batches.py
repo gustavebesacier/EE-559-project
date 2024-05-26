@@ -60,8 +60,7 @@ def tokenize_function(examples,tokenizer):
         """
     return tokenizer(examples, padding="max_length", truncation=True)
 
-def Spliter_DataLoader(hate_target,neutral_target, tokenizer, batch_size, test_size=0.2, random_state=38,
-                       subset_size = 3000):
+def Spliter_DataLoader(hate_target,neutral_target, tokenizer, batch_size, test_size=0.2, random_state=38):
     """
         Prepare DataLoader instances for hate and neutral datasets after splitting them into train and test sets.
 
@@ -76,6 +75,8 @@ def Spliter_DataLoader(hate_target,neutral_target, tokenizer, batch_size, test_s
         """
     hate_data = pd.read_csv(hate_target, header=None, names=['text'])
     neutral_data = pd.read_csv(neutral_target, header=None, names=['text'])
+
+    subset_size = min(len(hate_data), len(neutral_data))
 
     if subset_size:
         hate_data = hate_data.sample(subset_size)

@@ -12,12 +12,9 @@ import csv
 import os
 import matplotlib.pyplot as plt
 from transformers import get_linear_schedule_with_warmup
-# from main import OUR_TARGET
-
 import warnings
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-
 
 OUR_TARGET = ["women", "jews", "asian", "black", "lgbtq", "latino", "muslim", "indigenous", "arab", "disabilities", "others"]
 MAPPING = {OUR_TARGET[i]: i for i in range(len(OUR_TARGET))}
@@ -25,10 +22,11 @@ INV_MAPPING = {v: k for k, v in MAPPING.items()}
 
 DEVICE = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-DIR = os.getcwd() + "/"
-FILE_TRAIN = DIR + "full_target_id.csv"
-FILE_TEST  = DIR + "full_target_id_test.csv"
+#DIR = "Data"
+FILE_TRAIN = "Data/full_target_id.csv"
+FILE_TEST = "Data/full_target_id_test.csv"
 EPOCHS = 5
+
 
 class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
     """
@@ -39,6 +37,7 @@ class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
         :param cosine_scheduler: The scheduler used for the cosine annealing phase.
         :param num_warmup_steps: The number of steps for the warmup phase.
         """
+
     def __init__(self, optimizer, warmup_scheduler, cosine_scheduler, num_warmup_steps):
         self.warmup_scheduler = warmup_scheduler
         self.cosine_scheduler = cosine_scheduler
@@ -59,8 +58,10 @@ class WarmupThenCosineScheduler(torch.optim.lr_scheduler._LRScheduler):
             self.cosine_scheduler.step(epoch)
         self.step_count += 1
 
+
 class HATEDataset(torch.utils.data.Dataset):
     """Permits to have correctly composed datasets"""
+
     def __init__(self, encodings, labels):
         self.encodings = encodings
         self.labels = labels
@@ -74,8 +75,6 @@ class HATEDataset(torch.utils.data.Dataset):
         return len(self.labels)
 
 
-
-
 def read_target_split(file):
     """convert the dataset into one list for text and one for labels"""
     data = pd.read_csv(file)
@@ -85,30 +84,31 @@ def read_target_split(file):
 
     return texts, labels
 
+
 def prepare_data(file_train, file_test):
     """Gathers all the prompts from the various files in a file for training, and a file for testing"""
-    
+
     with open(file_train, "w") as csvfile:
         # set the header to ['target', 'text']
         csvwriter = csv.writer(csvfile)
         csvwriter.writerow(['target', 'text'])
 
     with open(file_train, "a"):
-        for file in os.scandir(DIR + "Data"):
+        for file in os.scandir("Data"):
             # loop over all the files from the folder (one per target/tone)
             try:
-              if file.name.split(".")[1] == 'csv':
-                  # only uses csv files - in case of error
-                  df = pd.read_csv(file, header = None, names = ['text'])
-                  target = file.name.split("_")[1].split(".")[0] # scrap the target from the file name
-                  if target == 'other':
-                      target = 'others'
-                  df['target'] = MAPPING[target] # set the id of the target in the file
+                if file.name.split(".")[1] == 'csv':
+                    # only uses csv files - in case of error
+                    df = pd.read_csv(file, header=None, names=['text'])
+                    target = file.name.split("_")[1].split(".")[0]  # scrap the target from the file name
+                    if target == 'other':
+                        target = 'others'
+                    df['target'] = MAPPING[target]  # set the id of the target in the file
 
-                  df = df[['target', 'text']]
-                  df.to_csv(file_train, mode='a', header=False, index=False) # save to csv
+                    df = df[['target', 'text']]
+                    df.to_csv(file_train, mode='a', header=False, index=False)  # save to csv
             except:
-              pass
+                pass
     # Remove duplicates
     train = pd.read_csv(file_train)
     train = train.drop_duplicates()
@@ -118,19 +118,20 @@ def prepare_data(file_train, file_test):
     # Create test file
     data = train.sample(1000)
 
-    data.to_csv(file_test, columns = ['target', 'text'], index = False)
-    
+    data.to_csv(file_test, columns=['target', 'text'], index=False)
+
 
 def clean_semicolumns(data):
     for name in data.columns.tolist():
         if ":" in name:
-            data = data.drop([name], axis =1)
+            data = data.drop([name], axis=1)
     return data
+
 
 def get_weight_classes(data):
     "Takes a dataframe and returns a list of the frequency of each target"
     value_counts = data['target'].value_counts()
-    weights = [elem[1]/len(data) for elem in sorted(value_counts.items())]
+    weights = [elem[1] / len(data) for elem in sorted(value_counts.items())]
     return weights
 
 
@@ -155,17 +156,19 @@ def acc(preds, target):
         """
     return accuracy_score(target, preds)
 
-def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, lr_scheduler, device = DEVICE):
+
+def model_training(model, train_dataset, test_dataset, epochs, optimization, criterion, metrics, lr_scheduler,
+                   device=DEVICE):
     """This function splits the data into dedicated dataloaders, then performs training on multiple epochs and tests
     Lots of piece of code are extracted from EE559 labs/exercises and were not created by us but developed by Idiap Research Institute."""
 
     model.to(device)
 
-    model.train() # set the model in train mode
+    model.train()  # set the model in train mode
 
     # load data
     train_loader = DataLoader(train_dataset, batch_size=50, shuffle=True)
-    test_loader =  DataLoader(test_dataset, batch_size=50, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=50, shuffle=True)
 
     # prepare lists for exporting the metrics
     train_loss = list()
@@ -191,7 +194,7 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
             attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
 
-            outputs = model(input_ids, attention_mask=attention_mask, labels=labels)#.cpu()
+            outputs = model(input_ids, attention_mask=attention_mask, labels=labels)  # .cpu()
 
             with torch.no_grad():
                 _, pred = torch.max(outputs.logits, 1)
@@ -217,17 +220,17 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
         epoch_loss = epoch_loss
 
         for k in epoch_metrics.keys():
-          epoch_metrics[k] /= len(train_loader)
+            epoch_metrics[k] /= len(train_loader)
 
         train_loss.append(epoch_loss)
         train_accuray.append(epoch_metrics['ACC'])
         train_f1.append(epoch_metrics['F1-weighted'])
 
         print('train Loss: {:.4f}, '.format(epoch_loss),
-          ', '.join(['{}: {:.4f}'.format(k, epoch_metrics[k]) for k in epoch_metrics.keys()]), "\n")
+              ', '.join(['{}: {:.4f}'.format(k, epoch_metrics[k]) for k in epoch_metrics.keys()]), "\n")
 
         # Evaluate the model
-        
+
         model.eval()
         epoch_eval_loss = 0
         epoch_eval_metrics = dict(zip(metrics.keys(), torch.zeros(len(metrics))))
@@ -240,7 +243,7 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
                 attention_mask = batch['attention_mask'].to(device)
                 labels = batch['labels'].to(device)
 
-                outputs = model(input_ids, attention_mask=attention_mask, labels=labels)#.cpu()
+                outputs = model(input_ids, attention_mask=attention_mask, labels=labels)  # .cpu()
                 _, pred = torch.max(outputs.logits, 1)
                 loss = outputs.loss
 
@@ -254,20 +257,22 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
         epoch_eval_loss /= len(test_loader)
 
         for k in epoch_eval_metrics.keys():
-          epoch_eval_metrics[k] /= len(test_loader)
+            epoch_eval_metrics[k] /= len(test_loader)
 
         eval_loss.append(epoch_eval_loss)
         eval_accuray.append(epoch_eval_metrics['ACC'])
         eval_f1.append(epoch_eval_metrics['F1-weighted'])
 
         print('eval Loss: {:.4f}, '.format(epoch_eval_loss),
-          ', '.join(['{}: {:.4f}'.format(k, epoch_eval_metrics[k]) for k in epoch_eval_metrics.keys()]), "\n")
+              ', '.join(['{}: {:.4f}'.format(k, epoch_eval_metrics[k]) for k in epoch_eval_metrics.keys()]), "\n")
 
-        file_path = DIR + "model/log.csv"
+        file_path = "model/log.csv"
 
         l = [
-            [epoch, "train", "loss", epoch_loss], [epoch, "train", "acc", epoch_metrics['ACC'].item()], [epoch, "train", "f1", epoch_eval_metrics['F1-weighted'].item()],
-            [epoch, "eval", "loss", epoch_eval_loss], [epoch, "eval", "acc", epoch_eval_metrics['ACC'].item()], [epoch, "eval", "f1", epoch_eval_metrics['F1-weighted'].item()]]
+            [epoch, "train", "loss", epoch_loss], [epoch, "train", "acc", epoch_metrics['ACC'].item()],
+            [epoch, "train", "f1", epoch_eval_metrics['F1-weighted'].item()],
+            [epoch, "eval", "loss", epoch_eval_loss], [epoch, "eval", "acc", epoch_eval_metrics['ACC'].item()],
+            [epoch, "eval", "f1", epoch_eval_metrics['F1-weighted'].item()]]
         all_metrics.append(l)
 
     with open(file_path, "w") as file:
@@ -275,11 +280,10 @@ def model_training(model, train_dataset, test_dataset, epochs, optimization, cri
         for epoch in all_metrics:
             writer.writerows(epoch)
 
-
     return train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1
 
 
-def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS, save = True, show = False):
+def run_training(path_train=FILE_TRAIN, path_test=FILE_TEST, epochs=EPOCHS, save=True, show=False):
     """Prepare data, train the model and save weights."""
 
     # prepare_data(path_train, path_test)
@@ -293,7 +297,7 @@ def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS,
     # Split the data
     train_texts, train_labels = read_target_split(path_train)
     test_texts, test_labels = read_target_split(path_test)
-    results_models_weights_dir = DIR + 'model/'
+    results_models_weights_dir = 'model/'
 
     # Define tokenizer
     tokenizer = DistilBertTokenizerFast.from_pretrained('distilbert-base-uncased')
@@ -309,19 +313,19 @@ def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS,
     # Model training
     criterion = nn.CrossEntropyLoss(weight=weights_targets)
     model_ = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=len(MAPPING))
-    
+
     # load previous weights
-    weights_path = results_models_weights_dir + 'weights_sentiment_analysis.pth'
-    
+    weights_path = None
+
     if weights_path is not None:
         # Load the state dictionary directly
         state_dict = torch.load(weights_path)
         model_.load_state_dict(state_dict)
-    
+
     optimizer = AdamW(model_.parameters(), lr=5e-5)
 
     num_training_steps = epochs * len(train_dataset)
-    T_0 = 1     # Number of epochs for the first restart
+    T_0 = 1  # Number of epochs for the first restart
     T_mult = 2  # Increase in the cycles
     num_warmup_steps = 50
 
@@ -339,13 +343,17 @@ def run_training(path_train = FILE_TRAIN, path_test = FILE_TEST, epochs= EPOCHS,
 
     model_.to(DEVICE)
 
-    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset, test_dataset, epochs, optimizer, criterion, metrics, lr_scheduler=lr_scheduler)
+    train_loss, train_accuray, train_f1, eval_loss, eval_accuray, eval_f1 = model_training(model_, train_dataset,
+                                                                                           test_dataset, epochs,
+                                                                                           optimizer, criterion,
+                                                                                           metrics,
+                                                                                           lr_scheduler=lr_scheduler)
 
     torch.save(model_.state_dict(), weights_path)
 
-    # get the metrics from the log file    
-    train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1 = get_values_log(DIR + "model/log.csv")
-    
+    # get the metrics from the log file
+    train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1 = get_values_log("model/log.csv")
+
     # plot and save the result
     plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, show=show, save=save)
 
@@ -383,10 +391,10 @@ def get_values_log(log_path):
     return train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1
 
 
-def plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, show = False, save=True):
+def plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, show=False, save=True):
     """Plot the metrics if the training and testing."""
 
-    epochs = [i+1 for i in range(len(train_acc))]
+    epochs = [i + 1 for i in range(len(train_acc))]
 
     # We want the 3 plots next to each other
     _, axs = plt.subplots(1, 3, figsize=(18, 5))
@@ -422,21 +430,19 @@ def plot_metrics(train_loss, train_acc, train_f1, eval_loss, eval_acc, eval_f1, 
     plt.tight_layout()
 
     if save:
-        plt.savefig(DIR + "model/metrics")
+        plt.savefig("model/metrics")
 
     if show:
         plt.show()
 
 
-if __name__ == "__main__":
-
+#if __name__ == "__main__":
     # small_test  = DIR + "small_target_id_test.csv"
     # small_train = DIR + "small_target_id.csv"
-    
-    # run_training(small_train, small_test, 2)
 
+    #  run_training(small_train, small_test, 2)
 
-    FILE_TRAIN = "full_target.csv"
-    FILE_TEST  = "full_target_test.csv"
-    
-    run_training(FILE_TRAIN, FILE_TEST, 2)
+    #FILE_TRAIN = "full_target.csv"
+    #FILE_TEST = "full_target_test.csv"
+
+    #run_training(FILE_TRAIN, FILE_TEST, 2)

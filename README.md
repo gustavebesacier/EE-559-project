@@ -41,6 +41,7 @@ The following library are used:
 
 ### Data
 The data is in different formats (csv and txt), gathered from different datasets. More details and explanations are in the report. 
+It can be found at: https://drive.google.com/drive/folders/1skf4DFO2driiv-AefB8YExiYA8L2OpKE?usp=share_link
 
 ### Training weights
 The training weights are available on request on a google drive repository.

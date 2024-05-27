@@ -44,7 +44,7 @@ The data is in different formats (csv and txt), gathered from different datasets
 It can be found at: https://drive.google.com/drive/folders/1skf4DFO2driiv-AefB8YExiYA8L2OpKE?usp=share_link
 
 ### Training weights
-The training weights are available on request on a google drive repository.
+The training weights are available on request on a google drive repository (https://drive.google.com/drive/folders/1skf4DFO2driiv-AefB8YExiYA8L2OpKE?usp=share_link).
 
 ## Usage 🫳
 The code can be downloaded on the GitHub repository together with the data. Usage is of a standard Python code.
